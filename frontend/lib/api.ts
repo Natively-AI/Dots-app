@@ -1,4 +1,4 @@
-import { Event, Sport, User, Match, GroupChat, Conversation } from '@/types';
+import { Event, Sport, User, Match, GroupChat, Conversation, Goal } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -224,8 +224,8 @@ export class ApiClient {
     return this.request<Sport[]>('/sports');
   }
 
-  async getGoals() {
-    return this.request('/goals');
+  async getGoals(): Promise<Goal[]> {
+    return this.request<Goal[]>('/goals');
   }
 }
 
