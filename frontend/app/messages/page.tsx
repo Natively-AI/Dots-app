@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, Suspense } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Navbar from '@/components/Navbar';
@@ -9,7 +9,7 @@ import { api } from '@/lib/api';
 import { Conversation, Message } from '@/types';
 import Link from 'next/link';
 
-export default function MessagesPage() {
+function MessagesPageContent() {
   const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -415,5 +415,21 @@ export default function MessagesPage() {
 
       <BottomNav />
     </div>
+  );
+}
+
+export default function MessagesPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-white">
+        <Navbar />
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-600">Loading...</div>
+        </div>
+        <BottomNav />
+      </div>
+    }>
+      <MessagesPageContent />
+    </Suspense>
   );
 }
