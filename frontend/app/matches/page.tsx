@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Navbar from '@/components/Navbar';
@@ -10,7 +10,7 @@ import { api } from '@/lib/api';
 import { Match } from '@/types';
 import Link from 'next/link';
 
-export default function MatchesPage() {
+function MatchesPageContent() {
   const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -517,6 +517,22 @@ export default function MatchesPage() {
 
       <BottomNav />
     </div>
+  );
+}
+
+export default function MatchesPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-600">Loading...</div>
+        </div>
+        <BottomNav />
+      </div>
+    }>
+      <MatchesPageContent />
+    </Suspense>
   );
 }
 
