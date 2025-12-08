@@ -1,4 +1,4 @@
-import { Event, Sport, User, Match, GroupChat, Conversation, Goal, Message } from '@/types';
+import { Event, Sport, User, Match, GroupChat, Conversation, Goal, Message, GroupMember } from '@/types';
 import {
   mockUsers,
   mockEvents,
