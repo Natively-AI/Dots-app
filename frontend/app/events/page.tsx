@@ -37,10 +37,6 @@ export default function EventsPage() {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
-    if (!user) {
-      router.push('/login');
-      return;
-    }
     loadData();
     
     // Get user location

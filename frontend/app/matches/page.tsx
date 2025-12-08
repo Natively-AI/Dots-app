@@ -26,11 +26,6 @@ function MatchesPageContent() {
   const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
-    if (!user) {
-      router.push('/login');
-      return;
-    }
-    
     // Check URL params for tab
     const tab = searchParams?.get('tab');
     if (tab === 'my-matches') {

@@ -24,10 +24,6 @@ export default function CreateEventPage() {
   });
 
   useEffect(() => {
-    if (!user) {
-      router.push('/login');
-      return;
-    }
     loadSports();
   }, [user]);
 

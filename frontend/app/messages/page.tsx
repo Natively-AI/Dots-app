@@ -26,10 +26,6 @@ function MessagesPageContent() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!user) {
-      router.push('/login');
-      return;
-    }
     loadConversations();
     
     // Check URL params for conversation

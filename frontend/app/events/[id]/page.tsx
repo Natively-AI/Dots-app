@@ -18,10 +18,6 @@ export default function EventDetailPage() {
   const [isParticipant, setIsParticipant] = useState(false);
 
   useEffect(() => {
-    if (!user) {
-      router.push('/login');
-      return;
-    }
     loadEvent();
   }, [user, eventId]);
 

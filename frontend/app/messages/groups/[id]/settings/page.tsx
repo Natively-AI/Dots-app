@@ -21,10 +21,6 @@ export default function GroupSettingsPage() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    if (!user) {
-      router.push('/login');
-      return;
-    }
     loadGroup();
   }, [user, groupId]);
 
