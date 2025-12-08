@@ -50,14 +50,14 @@ export class ApiClient {
   }
 
   // Auth
-  async register(email: string, password: string, fullName: string) {
+  async register(email: string, password: string, fullName: string): Promise<{ access_token: string; token_type: string }> {
     return this.request<{ access_token: string; token_type: string }>('/auth/register', {
       method: 'POST',
       body: JSON.stringify({ email, password, full_name: fullName }),
     });
   }
 
-  async login(email: string, password: string) {
+  async login(email: string, password: string): Promise<{ access_token: string; token_type: string }> {
     const formData = new FormData();
     formData.append('username', email);
     formData.append('password', password);
@@ -84,8 +84,8 @@ export class ApiClient {
     return this.request<User>(`/users/${userId}`);
   }
 
-  async updateUser(data: any) {
-    return this.request('/users/me', {
+  async updateUser(data: any): Promise<User> {
+    return this.request<User>('/users/me', {
       method: 'PUT',
       body: JSON.stringify(data),
     });
@@ -112,21 +112,21 @@ export class ApiClient {
     });
   }
 
-  async updateEvent(eventId: number, data: any) {
-    return this.request(`/events/${eventId}`, {
+  async updateEvent(eventId: number, data: any): Promise<Event> {
+    return this.request<Event>(`/events/${eventId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
   }
 
-  async rsvpEvent(eventId: number) {
-    return this.request(`/events/${eventId}/rsvp`, {
+  async rsvpEvent(eventId: number): Promise<void> {
+    return this.request<void>(`/events/${eventId}/rsvp`, {
       method: 'POST',
     });
   }
 
-  async cancelRsvp(eventId: number) {
-    return this.request(`/events/${eventId}/rsvp`, {
+  async cancelRsvp(eventId: number): Promise<void> {
+    return this.request<void>(`/events/${eventId}/rsvp`, {
       method: 'DELETE',
     });
   }
@@ -141,22 +141,22 @@ export class ApiClient {
     return this.request<Match[]>(`/matches${query}`);
   }
 
-  async createMatch(user2Id: number) {
-    return this.request('/matches', {
+  async createMatch(user2Id: number): Promise<Match> {
+    return this.request<Match>('/matches', {
       method: 'POST',
       body: JSON.stringify({ user2_id: user2Id }),
     });
   }
 
-  async updateMatch(matchId: number, status: 'accepted' | 'rejected') {
-    return this.request(`/matches/${matchId}`, {
+  async updateMatch(matchId: number, status: 'accepted' | 'rejected'): Promise<Match> {
+    return this.request<Match>(`/matches/${matchId}`, {
       method: 'PUT',
       body: JSON.stringify({ status }),
     });
   }
 
-  async deleteMatch(matchId: number) {
-    return this.request(`/matches/${matchId}`, {
+  async deleteMatch(matchId: number): Promise<void> {
+    return this.request<void>(`/matches/${matchId}`, {
       method: 'DELETE',
     });
   }
@@ -170,8 +170,8 @@ export class ApiClient {
     return this.request<any[]>(`/messages/conversations/${conversationId}?conversation_type=${type}`);
   }
 
-  async sendMessage(data: { content: string; receiver_id?: number; event_id?: number; group_id?: number }) {
-    return this.request('/messages', {
+  async sendMessage(data: { content: string; receiver_id?: number; event_id?: number; group_id?: number }): Promise<any> {
+    return this.request<any>('/messages', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -186,35 +186,35 @@ export class ApiClient {
     return this.request<GroupChat>(`/groups/${groupId}`);
   }
 
-  async createGroup(data: { name: string; description?: string; member_ids: number[] }) {
-    return this.request('/groups', {
+  async createGroup(data: { name: string; description?: string; member_ids: number[] }): Promise<GroupChat> {
+    return this.request<GroupChat>('/groups', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  async updateGroup(groupId: number, data: { name?: string; description?: string; avatar_url?: string }) {
-    return this.request(`/groups/${groupId}`, {
+  async updateGroup(groupId: number, data: { name?: string; description?: string; avatar_url?: string }): Promise<GroupChat> {
+    return this.request<GroupChat>(`/groups/${groupId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
   }
 
-  async addGroupMembers(groupId: number, user_ids: number[]) {
-    return this.request(`/groups/${groupId}/members`, {
+  async addGroupMembers(groupId: number, user_ids: number[]): Promise<void> {
+    return this.request<void>(`/groups/${groupId}/members`, {
       method: 'POST',
       body: JSON.stringify({ user_ids }),
     });
   }
 
-  async removeGroupMember(groupId: number, userId: number) {
-    return this.request(`/groups/${groupId}/members/${userId}`, {
+  async removeGroupMember(groupId: number, userId: number): Promise<void> {
+    return this.request<void>(`/groups/${groupId}/members/${userId}`, {
       method: 'DELETE',
     });
   }
 
-  async leaveGroup(groupId: number) {
-    return this.request(`/groups/${groupId}/leave`, {
+  async leaveGroup(groupId: number): Promise<void> {
+    return this.request<void>(`/groups/${groupId}/leave`, {
       method: 'POST',
     });
   }
