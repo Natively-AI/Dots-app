@@ -105,8 +105,8 @@ export class ApiClient {
     return this.request<Event>(`/events/${eventId}`);
   }
 
-  async createEvent(data: any) {
-    return this.request('/events', {
+  async createEvent(data: any): Promise<Event> {
+    return this.request<Event>('/events', {
       method: 'POST',
       body: JSON.stringify(data),
     });
