@@ -17,10 +17,6 @@ export default function MessagesSettingsPage() {
   });
 
   useEffect(() => {
-    if (!user) {
-      router.push('/login');
-      return;
-    }
     // Load saved settings from localStorage
     const saved = localStorage.getItem('messageSettings');
     if (saved) {
