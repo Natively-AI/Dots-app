@@ -1,3 +1,5 @@
+import { Event } from '@/types';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export class ApiClient {
@@ -99,8 +101,8 @@ export class ApiClient {
     return this.request(`/events?${query.toString()}`);
   }
 
-  async getEvent(eventId: number) {
-    return this.request(`/events/${eventId}`);
+  async getEvent(eventId: number): Promise<Event> {
+    return this.request<Event>(`/events/${eventId}`);
   }
 
   async createEvent(data: any) {
