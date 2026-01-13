@@ -8,7 +8,7 @@ from models.user import User, UserRole
 from models.event import Event
 from models.sport import Sport
 from models.goal import Goal
-from models.match import Match, MatchStatus
+from models.buddy import Buddy, BuddyStatus
 from models.subscription import Subscription, SubscriptionTier
 from models.event import event_rsvps
 from models.message import Message
@@ -86,7 +86,7 @@ SAMPLE_EVENTS = [
 ]
 
 def seed_sample_data(db: Session):
-    """Seed database with sample users, events, and matches"""
+    """Seed database with sample users, events, and buddies"""
     
     # Get sports and goals
     sports = db.query(Sport).all()
@@ -248,25 +248,25 @@ def seed_sample_data(db: Session):
     db.commit()
     print(f"✅ Created {len(created_events)} events\n")
     
-    # Create some matches
-    print("🤝 Creating sample matches...")
-    matches_created = 0
+    # Create some buddies
+    print("🤝 Creating sample buddies...")
+    buddies_created = 0
     
-    # Create matches between users
+    # Create buddies between users
     for i, user1 in enumerate(created_users):
         for user2 in created_users[i+1:]:
-            # 30% chance of creating a match
+            # 30% chance of creating a buddy
             if random.random() < 0.3:
-                # Check if match already exists
-                existing = db.query(Match).filter(
-                    ((Match.user1_id == user1.id) & (Match.user2_id == user2.id)) |
-                    ((Match.user1_id == user2.id) & (Match.user2_id == user1.id))
+                # Check if buddy already exists
+                existing = db.query(Buddy).filter(
+                    ((Buddy.user1_id == user1.id) & (Buddy.user2_id == user2.id)) |
+                    ((Buddy.user1_id == user2.id) & (Buddy.user2_id == user1.id))
                 ).first()
                 
                 if existing:
                     continue
                 
-                # Calculate match score (simplified)
+                # Calculate buddy score (simplified)
                 common_sports = set(s.id for s in user1.sports) & set(s.id for s in user2.sports)
                 common_goals = set(g.id for g in user1.goals) & set(g.id for g in user2.goals)
                 
@@ -280,17 +280,17 @@ def seed_sample_data(db: Session):
                 
                 score = min(score, 100.0)
                 
-                match = Match(
+                buddy = Buddy(
                     user1_id=user1.id,
                     user2_id=user2.id,
                     match_score=round(score, 2),
-                    status=random.choice([MatchStatus.PENDING, MatchStatus.ACCEPTED])
+                    status=random.choice([BuddyStatus.PENDING, BuddyStatus.ACCEPTED])
                 )
-                db.add(match)
-                matches_created += 1
+                db.add(buddy)
+                buddies_created += 1
     
     db.commit()
-    print(f"✅ Created {matches_created} matches\n")
+    print(f"✅ Created {buddies_created} buddies\n")
     
     # Create sample messages
     print("💬 Creating sample messages...")
@@ -299,13 +299,13 @@ def seed_sample_data(db: Session):
     # Sample conversation starters
     conversation_starters = [
         "Hey! Are you still up for that run tomorrow?",
-        "Thanks for the match! Would love to work out together sometime.",
+        "Thanks for the buddy request! Would love to work out together sometime.",
         "Saw you're into {sport}, want to join our group session?",
         "Hey! How's your training going?",
         "Are you going to the {event} event?",
         "Would you be interested in a workout session this weekend?",
         "Hey! I noticed we have similar fitness goals. Want to connect?",
-        "Thanks for accepting my match! Let's plan something!",
+        "Thanks for accepting my buddy request! Let's plan something!",
     ]
     
     responses = [
@@ -328,38 +328,38 @@ def seed_sample_data(db: Session):
         print("  ⚠️  Alice not found, skipping message creation")
     else:
         # Create 1:1 conversations - prioritize conversations with alice
-        accepted_matches = db.query(Match).filter(Match.status == MatchStatus.ACCEPTED).all()
+        accepted_buddies = db.query(Buddy).filter(Buddy.status == BuddyStatus.ACCEPTED).all()
         
         # First, create conversations with alice
-        alice_matches = [m for m in accepted_matches if m.user1_id == alice.id or m.user2_id == alice.id]
+        alice_buddies = [m for m in accepted_buddies if m.user1_id == alice.id or m.user2_id == alice.id]
         
-        # If alice doesn't have enough matches, create some
-        if len(alice_matches) < 8:
-            # Get some random users to create matches with alice
+        # If alice doesn't have enough buddies, create some
+        if len(alice_buddies) < 8:
+            # Get some random users to create buddies with alice
             other_users = [u for u in created_users if u.id != alice.id]
-            needed_matches = 8 - len(alice_matches)
-            for user in other_users[:needed_matches]:
-                # Create a match if it doesn't exist
-                existing = db.query(Match).filter(
-                    ((Match.user1_id == alice.id) & (Match.user2_id == user.id)) |
-                    ((Match.user1_id == user.id) & (Match.user2_id == alice.id))
+            needed_buddies = 8 - len(alice_buddies)
+            for user in other_users[:needed_buddies]:
+                # Create a buddy if it doesn't exist
+                existing = db.query(Buddy).filter(
+                    ((Buddy.user1_id == alice.id) & (Buddy.user2_id == user.id)) |
+                    ((Buddy.user1_id == user.id) & (Buddy.user2_id == alice.id))
                 ).first()
                 if not existing:
-                    match = Match(
+                    buddy = Buddy(
                         user1_id=alice.id,
                         user2_id=user.id,
                         match_score=random.uniform(60, 95),
-                        status=MatchStatus.ACCEPTED
+                        status=BuddyStatus.ACCEPTED
                     )
-                    db.add(match)
+                    db.add(buddy)
                     db.flush()
-            # Refresh matches
-            accepted_matches = db.query(Match).filter(Match.status == MatchStatus.ACCEPTED).all()
-            alice_matches = [m for m in accepted_matches if m.user1_id == alice.id or m.user2_id == alice.id]
+            # Refresh buddies
+            accepted_buddies = db.query(Buddy).filter(Buddy.status == BuddyStatus.ACCEPTED).all()
+            alice_buddies = [m for m in accepted_buddies if m.user1_id == alice.id or m.user2_id == alice.id]
         
-        for match in alice_matches[:8]:  # Create 8 conversations with alice
-            user1 = db.query(User).filter(User.id == match.user1_id).first()
-            user2 = db.query(User).filter(User.id == match.user2_id).first()
+        for buddy in alice_buddies[:8]:  # Create 8 conversations with alice
+            user1 = db.query(User).filter(User.id == buddy.user1_id).first()
+            user2 = db.query(User).filter(User.id == buddy.user2_id).first()
             
             if not user1 or not user2:
                 continue
@@ -398,12 +398,12 @@ def seed_sample_data(db: Session):
     
     # Then create other conversations (not necessarily with alice)
     if alice:
-        other_matches = [m for m in accepted_matches if m.user1_id != alice.id and m.user2_id != alice.id]
+        other_buddies = [m for m in accepted_buddies if m.user1_id != alice.id and m.user2_id != alice.id]
     else:
-        other_matches = accepted_matches
-    for match in other_matches[:15]:  # Create 15 more conversations
-        user1 = db.query(User).filter(User.id == match.user1_id).first()
-        user2 = db.query(User).filter(User.id == match.user2_id).first()
+        other_buddies = accepted_buddies
+    for buddy in other_buddies[:15]:  # Create 15 more conversations
+        user1 = db.query(User).filter(User.id == buddy.user1_id).first()
+        user2 = db.query(User).filter(User.id == buddy.user2_id).first()
         
         if not user1 or not user2:
             continue
@@ -566,7 +566,7 @@ def seed_sample_data(db: Session):
     print(f"\n📊 Summary:")
     print(f"   - Users: {len(created_users)}")
     print(f"   - Events: {len(created_events)}")
-    print(f"   - Matches: {matches_created}")
+    print(f"   - Buddies: {buddies_created}")
     print(f"   - Messages: {messages_created}")
     print(f"   - Group Chats: {groups_created}")
     print(f"\n🔑 Test credentials:")
@@ -575,12 +575,12 @@ def seed_sample_data(db: Session):
 
 
 def clean_sample_data(db: Session):
-    """Remove all sample data (users, events, matches)"""
+    """Remove all sample data (users, events, buddies)"""
     print("🧹 Cleaning sample data...")
     
-    # Delete matches
-    matches_deleted = db.query(Match).delete()
-    print(f"  ✅ Deleted {matches_deleted} matches")
+    # Delete buddies
+    buddies_deleted = db.query(Buddy).delete()
+    print(f"  ✅ Deleted {buddies_deleted} buddies")
     
     # Delete event RSVPs
     from sqlalchemy import delete

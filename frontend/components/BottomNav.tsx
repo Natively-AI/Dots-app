@@ -13,7 +13,7 @@ export default function BottomNav() {
   const navItems = [
     { href: '/', icon: '🏠', label: 'Home' },
     { href: '/events', icon: '📅', label: 'Events' },
-    { href: '/matches', icon: '🔍', label: 'Matches' },
+    { href: '/buddies', icon: '🔍', label: 'Buddies' },
     { href: '/messages', icon: '💬', label: 'Messages' },
     { href: '/profile', icon: '👤', label: 'Profile' },
   ];

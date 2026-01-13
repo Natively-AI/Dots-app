@@ -34,8 +34,8 @@ class User(Base):
     event_rsvps = relationship("Event", secondary="event_rsvps", back_populates="participants")
     sent_messages = relationship("Message", foreign_keys="Message.sender_id", back_populates="sender")
     received_messages = relationship("Message", foreign_keys="Message.receiver_id", back_populates="receiver")
-    sent_matches = relationship("Match", foreign_keys="Match.user1_id", back_populates="user1")
-    received_matches = relationship("Match", foreign_keys="Match.user2_id", back_populates="user2")
+    sent_buddies = relationship("Buddy", foreign_keys="Buddy.user1_id", back_populates="user1")
+    received_buddies = relationship("Buddy", foreign_keys="Buddy.user2_id", back_populates="user2")
     subscription = relationship("Subscription", back_populates="user", uselist=False)
     group_chats = relationship("GroupChat", secondary="group_members", back_populates="members")
 

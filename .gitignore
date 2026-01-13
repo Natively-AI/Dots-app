@@ -1,46 +1,44 @@
-# Dependencies
-node_modules/
-venv/
-env/
-.venv/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-
 # Environment variables
 .env
 .env.local
 .env*.local
 
-# IDE
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Node
+node_modules/
+.next/
+out/
+dist/
+build/
+*.log
+
+# IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# Build outputs
-.next/
-out/
-dist/
-build/
-*.egg-info/
-
-# Logs
-*.log
-logs/
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
 # OS
 .DS_Store
 Thumbs.db
 
-# Docker
-postgres_data/
+# Database
+*.db
+*.sqlite
 
+# Misc
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/

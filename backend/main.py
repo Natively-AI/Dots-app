@@ -4,7 +4,7 @@ from core.config import settings
 from api.auth import router as auth_router
 from api.users import router as users_router
 from api.events import router as events_router
-from api.matches import router as matches_router
+from api.buddies import router as buddies_router
 from api.messages import router as messages_router
 from api.groups import router as groups_router
 from api.sports import router as sports_router
@@ -25,7 +25,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(events_router)
-app.include_router(matches_router)
+app.include_router(buddies_router)
 app.include_router(messages_router)
 app.include_router(groups_router)
 app.include_router(sports_router)

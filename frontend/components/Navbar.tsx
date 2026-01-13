@@ -39,7 +39,7 @@ export default function Navbar() {
   const navLinks = [
     { href: '/', label: 'Home' },
     { href: '/events', label: 'Events' },
-    { href: '/matches', label: 'Matches' },
+    { href: '/buddies', label: 'Buddies' },
     { href: '/messages', label: 'Messages' },
   ];
 

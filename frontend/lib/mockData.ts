@@ -1,4 +1,4 @@
-import { User, Event, Match, Message, Conversation, GroupChat, Sport, Goal, GroupMember } from '@/types';
+import { User, Event, Buddy, Message, Conversation, GroupChat, Sport, Goal, GroupMember } from '@/types';
 
 // Mock Sports
 export const mockSports: Sport[] = [
@@ -291,8 +291,8 @@ export const mockEvents: Event[] = [
   },
 ];
 
-// Mock Matches (accepted matches for current user)
-export const mockMatches: Match[] = [
+// Mock Buddies (accepted buddies for current user)
+export const mockBuddies: Buddy[] = [
   {
     id: 1,
     user1_id: 1,
@@ -325,8 +325,8 @@ export const mockMatches: Match[] = [
   },
 ];
 
-// Mock Suggested Matches (for discovery)
-export const mockSuggestedMatches: any[] = mockUsers.slice(5, 25).map((user, index) => ({
+// Mock Suggested Buddies (for discovery)
+export const mockSuggestedBuddies: any[] = mockUsers.slice(5, 25).map((user, index) => ({
   user,
   match_score: 60 + (index % 30),
   recent_events: mockEvents.slice(0, 2),

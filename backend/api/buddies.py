@@ -6,37 +6,37 @@ from datetime import datetime
 import random
 from core.database import get_db
 from api.auth import get_current_user
-from schemas.match import MatchResponse, MatchDetail, MatchRequest, MatchUpdate
+from schemas.buddy import BuddyResponse, BuddyDetail, BuddyRequest, BuddyUpdate
 from models.user import User
-from models.match import Match, MatchStatus
+from models.buddy import Buddy, BuddyStatus
 from models.event import Event, event_rsvps
-from services.matching import find_potential_matches, create_match_request
+from services.buddying import find_potential_buddies, create_buddy_request
 
-router = APIRouter(prefix="/matches", tags=["matches"])
+router = APIRouter(prefix="/buddies", tags=["buddies"])
 
 
 @router.get("/suggested", response_model=List[dict])
-async def get_suggested_matches(
+async def get_suggested_buddies(
     limit: int = Query(10, ge=1, le=50),
-    min_score: float = Query(20.0, ge=0.0, le=100.0),  # Lowered from 30 to 20 to ensure more matches
+    min_score: float = Query(20.0, ge=0.0, le=100.0),  # Lowered from 30 to 20 to ensure more buddies
     offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get suggested matches for current user with pagination"""
-    # Get all potential matches (no limit, sorted by score)
-    # Lower min_score to 20 to ensure we always have matches
-    all_matches = find_potential_matches(current_user, db, limit=None, min_score=min_score)
+    """Get suggested buddies for current user with pagination"""
+    # Get all potential buddies (no limit, sorted by score)
+    # Lower min_score to 20 to ensure we always have buddies
+    all_buddies = find_potential_buddies(current_user, db, limit=None, min_score=min_score)
     
-    # If we don't have enough matches, lower the threshold even more
-    if len(all_matches) < offset + limit:
-        all_matches = find_potential_matches(current_user, db, limit=None, min_score=10.0)
+    # If we don't have enough buddies, lower the threshold even more
+    if len(all_buddies) < offset + limit:
+        all_buddies = find_potential_buddies(current_user, db, limit=None, min_score=10.0)
     
     # Apply offset and limit for pagination
-    paginated_matches = all_matches[offset:offset + limit]
+    paginated_buddies = all_buddies[offset:offset + limit]
     
     result = []
-    for m in paginated_matches:
+    for m in paginated_buddies:
         user = m["user"]
         
         # Get recent events (last 3 events user attended/RSVPed to)
@@ -108,20 +108,20 @@ async def get_suggested_matches(
     return result
 
 
-@router.post("", response_model=MatchResponse, status_code=status.HTTP_201_CREATED)
-async def create_match(
-    match_request: MatchRequest,
+@router.post("", response_model=BuddyResponse, status_code=status.HTTP_201_CREATED)
+async def create_buddy(
+    buddy_request: BuddyRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Create a match request"""
-    if match_request.user2_id == current_user.id:
+    """Create a buddy request"""
+    if buddy_request.user2_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot match with yourself"
+            detail="Cannot buddy with yourself"
         )
     
-    user2 = db.query(User).filter(User.id == match_request.user2_id).first()
+    user2 = db.query(User).filter(User.id == buddy_request.user2_id).first()
     if not user2:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -129,8 +129,8 @@ async def create_match(
         )
     
     try:
-        match = create_match_request(current_user.id, match_request.user2_id, db)
-        return MatchResponse.model_validate(match)
+        buddy = create_buddy_request(current_user.id, buddy_request.user2_id, db)
+        return BuddyResponse.model_validate(buddy)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -138,103 +138,102 @@ async def create_match(
         )
 
 
-@router.get("", response_model=List[MatchDetail])
-async def list_matches(
-    status_filter: Optional[MatchStatus] = Query(None, alias="status"),
+@router.get("", response_model=List[BuddyDetail])
+async def list_buddies(
+    status_filter: Optional[BuddyStatus] = Query(None, alias="status"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """List all matches for current user"""
-    query = db.query(Match).filter(
-        (Match.user1_id == current_user.id) | (Match.user2_id == current_user.id)
+    """List all buddies for current user"""
+    query = db.query(Buddy).filter(
+        (Buddy.user1_id == current_user.id) | (Buddy.user2_id == current_user.id)
     )
     
     if status_filter:
-        query = query.filter(Match.status == status_filter)
+        query = query.filter(Buddy.status == status_filter)
     
-    matches = query.all()
+    buddies = query.all()
     
     result = []
-    for match in matches:
-        other_user = match.user1 if match.user2_id == current_user.id else match.user2
-        result.append(MatchDetail(
-            **{col.name: getattr(match, col.name) for col in match.__table__.columns},
+    for buddy in buddies:
+        other_user = buddy.user1 if buddy.user2_id == current_user.id else buddy.user2
+        result.append(BuddyDetail(
+            **{col.name: getattr(buddy, col.name) for col in buddy.__table__.columns},
             user1={
-                "id": match.user1.id,
-                "full_name": match.user1.full_name,
-                "age": match.user1.age,
-                "location": match.user1.location,
-                "avatar_url": match.user1.avatar_url,
-                "bio": match.user1.bio,
-                "sports": [{"id": s.id, "name": s.name, "icon": s.icon} for s in match.user1.sports],
-                "goals": [{"id": g.id, "name": g.name} for g in match.user1.goals]
+                "id": buddy.user1.id,
+                "full_name": buddy.user1.full_name,
+                "age": buddy.user1.age,
+                "location": buddy.user1.location,
+                "avatar_url": buddy.user1.avatar_url,
+                "bio": buddy.user1.bio,
+                "sports": [{"id": s.id, "name": s.name, "icon": s.icon} for s in buddy.user1.sports],
+                "goals": [{"id": g.id, "name": g.name} for g in buddy.user1.goals]
             },
             user2={
-                "id": match.user2.id,
-                "full_name": match.user2.full_name,
-                "age": match.user2.age,
-                "location": match.user2.location,
-                "avatar_url": match.user2.avatar_url,
-                "bio": match.user2.bio,
-                "sports": [{"id": s.id, "name": s.name, "icon": s.icon} for s in match.user2.sports],
-                "goals": [{"id": g.id, "name": g.name} for g in match.user2.goals]
+                "id": buddy.user2.id,
+                "full_name": buddy.user2.full_name,
+                "age": buddy.user2.age,
+                "location": buddy.user2.location,
+                "avatar_url": buddy.user2.avatar_url,
+                "bio": buddy.user2.bio,
+                "sports": [{"id": s.id, "name": s.name, "icon": s.icon} for s in buddy.user2.sports],
+                "goals": [{"id": g.id, "name": g.name} for g in buddy.user2.goals]
             }
         ))
     
     return result
 
 
-@router.delete("/{match_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_match(
-    match_id: int,
+@router.delete("/{buddy_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_buddy(
+    buddy_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Delete a match (remove from matches)"""
-    match = db.query(Match).filter(Match.id == match_id).first()
-    if not match:
+    """Delete a buddy (remove from buddies)"""
+    buddy = db.query(Buddy).filter(Buddy.id == buddy_id).first()
+    if not buddy:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Match not found"
+            detail="Buddy not found"
         )
     
-    # Only allow deletion if user is part of the match
-    if match.user1_id != current_user.id and match.user2_id != current_user.id:
+    # Only allow deletion if user is part of the buddy
+    if buddy.user1_id != current_user.id and buddy.user2_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to delete this match"
+            detail="Not authorized to delete this buddy"
         )
     
-    db.delete(match)
+    db.delete(buddy)
     db.commit()
     return None
 
 
-@router.put("/{match_id}", response_model=MatchResponse)
-async def update_match(
-    match_id: int,
-    match_update: MatchUpdate,
+@router.put("/{buddy_id}", response_model=BuddyResponse)
+async def update_buddy(
+    buddy_id: int,
+    buddy_update: BuddyUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Update match status (accept/reject)"""
-    match = db.query(Match).filter(Match.id == match_id).first()
-    if not match:
+    """Update buddy status (accept/reject)"""
+    buddy = db.query(Buddy).filter(Buddy.id == buddy_id).first()
+    if not buddy:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Match not found"
+            detail="Buddy not found"
         )
     
-    # Only the receiver can update the match status
-    if match.user2_id != current_user.id:
+    # Only the receiver can update the buddy status
+    if buddy.user2_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the receiver can update match status"
+            detail="Only the receiver can update buddy status"
         )
     
-    match.status = match_update.status
+    buddy.status = buddy_update.status
     db.commit()
-    db.refresh(match)
+    db.refresh(buddy)
     
-    return MatchResponse.model_validate(match)
-
+    return BuddyResponse.model_validate(buddy)

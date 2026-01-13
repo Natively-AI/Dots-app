@@ -7,20 +7,20 @@ import { useAuth } from '@/lib/auth';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import BottomNav from '@/components/BottomNav';
-import MatchGrid from '@/components/MatchGrid';
+import BuddyGrid from '@/components/BuddyGrid';
 import { api } from '@/lib/api';
-import { Match } from '@/types';
+import { Buddy } from '@/types';
 import Link from 'next/link';
 
-function MatchesPageContent() {
+function BuddiesPageContent() {
   const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [matches, setMatches] = useState<any[]>([]);
+  const [buddies, setBuddies] = useState<any[]>([]);
   const [suggested, setSuggested] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'discover' | 'my-matches'>('discover');
+  const [activeTab, setActiveTab] = useState<'discover' | 'my-buddies'>('discover');
   const [swipedUsers, setSwipedUsers] = useState<Set<number>>(new Set());
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -28,8 +28,8 @@ function MatchesPageContent() {
   useEffect(() => {
     // Check URL params for tab
     const tab = searchParams?.get('tab');
-    if (tab === 'my-matches') {
-      setActiveTab('my-matches');
+    if (tab === 'my-buddies') {
+      setActiveTab('my-buddies');
     }
     
     loadData(true); // Reset on initial load
@@ -37,22 +37,22 @@ function MatchesPageContent() {
 
   const loadData = async (reset = false) => {
     try {
-      const [matchesData, suggestedData] = await Promise.all([
-        api.getMatches(),
-        api.getSuggestedMatches(10, 20, reset ? 0 : suggested.length), // Lowered min_score to 20 for more matches
+      const [buddiesData, suggestedData] = await Promise.all([
+        api.getBuddies(),
+        api.getSuggestedBuddies(10, 20, reset ? 0 : suggested.length), // Lowered min_score to 20 for more buddies
       ]);
-      setMatches(matchesData);
+      setBuddies(buddiesData);
       if (reset) {
         setSuggested(suggestedData);
         setCurrentIndex(0);
         setSwipedUsers(new Set());
-        setHasMore(suggestedData.length > 0); // Always true if we got any matches
+        setHasMore(suggestedData.length > 0); // Always true if we got any buddies
       } else {
         setSuggested(prev => [...prev, ...suggestedData]);
         setHasMore(suggestedData.length > 0);
       }
     } catch (error) {
-      console.error('Failed to load matches:', error);
+      console.error('Failed to load buddies:', error);
       setHasMore(false);
     } finally {
       setLoading(false);
@@ -60,15 +60,15 @@ function MatchesPageContent() {
     }
   };
 
-  const loadMoreMatches = useCallback(async () => {
+  const loadMoreBuddies = useCallback(async () => {
     if (loadingMore || !hasMore || suggested.length === 0) return;
     
     setLoadingMore(true);
     try {
-      const nextBatch = await api.getSuggestedMatches(10, 20, suggested.length); // Lowered min_score to 20
+      const nextBatch = await api.getSuggestedBuddies(10, 20, suggested.length); // Lowered min_score to 20
       if (nextBatch.length === 0) {
         // Try with even lower threshold
-        const fallbackBatch = await api.getSuggestedMatches(10, 10, suggested.length);
+        const fallbackBatch = await api.getSuggestedBuddies(10, 10, suggested.length);
         if (fallbackBatch.length === 0) {
           setHasMore(false);
         } else {
@@ -80,19 +80,19 @@ function MatchesPageContent() {
         setHasMore(true); // Always assume more available
       }
     } catch (error) {
-      console.error('Failed to load more matches:', error);
+      console.error('Failed to load more buddies:', error);
       setHasMore(false);
     } finally {
       setLoadingMore(false);
     }
   }, [loadingMore, hasMore, suggested.length]);
 
-  // Load more matches when approaching the end
+  // Load more buddies when approaching the end
   useEffect(() => {
     if (activeTab === 'discover' && suggested.length > 0 && currentIndex >= suggested.length - 3 && hasMore && !loadingMore) {
-      loadMoreMatches();
+      loadMoreBuddies();
     }
-  }, [currentIndex, suggested.length, hasMore, loadingMore, activeTab, loadMoreMatches]);
+  }, [currentIndex, suggested.length, hasMore, loadingMore, activeTab, loadMoreBuddies]);
 
   const handleSwipe = async (direction: 'left' | 'right', user2Id: number) => {
     if (swipedUsers.has(user2Id)) return;
@@ -100,15 +100,15 @@ function MatchesPageContent() {
     setSwipedUsers(prev => new Set(prev).add(user2Id));
 
     if (direction === 'right') {
-      // Like - create match request
+      // Like - create buddy request
       try {
-        await api.createMatch(user2Id);
-        // Reload matches to show the new match
+        await api.createBuddy(user2Id);
+        // Reload buddies to show the new buddy
         setTimeout(() => {
           loadData();
         }, 500);
       } catch (error: any) {
-        console.error('Failed to create match:', error);
+        console.error('Failed to create buddy:', error);
         setSwipedUsers(prev => {
           const newSet = new Set(prev);
           newSet.delete(user2Id);
@@ -161,7 +161,7 @@ function MatchesPageContent() {
     );
   }
 
-  const currentMatch = suggested[currentIndex];
+  const currentBuddy = suggested[currentIndex];
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
@@ -174,7 +174,7 @@ function MatchesPageContent() {
             onClick={() => {
               setActiveTab('discover');
               setCurrentIndex(0);
-              router.push('/matches');
+              router.push('/buddies');
             }}
             className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 ${
               activeTab === 'discover'
@@ -186,19 +186,19 @@ function MatchesPageContent() {
           </button>
           <button
             onClick={() => {
-              setActiveTab('my-matches');
-              router.push('/matches?tab=my-matches');
+              setActiveTab('my-buddies');
+              router.push('/buddies?tab=my-buddies');
             }}
             className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 relative ${
-              activeTab === 'my-matches'
+              activeTab === 'my-buddies'
                 ? 'bg-[#00D9A5] text-black shadow-lg'
                 : 'bg-white text-gray-600 hover:bg-gray-100'
             }`}
           >
-            My Matches
-            {matches.length > 0 && (
+            My Buddies
+            {buddies.length > 0 && (
               <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                {matches.filter(m => m.status === 'accepted' || (m.status === 'pending' && m.user2_id === user?.id)).length}
+                {buddies.filter(m => m.status === 'accepted' || (m.status === 'pending' && m.user2_id === user?.id)).length}
               </span>
             )}
           </button>
@@ -210,21 +210,21 @@ function MatchesPageContent() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {loading ? (
             <div className="text-center py-16 bg-white rounded-3xl shadow-lg">
-              <div className="text-gray-600">Loading matches...</div>
+              <div className="text-gray-600">Loading buddies...</div>
             </div>
           ) : suggested.length === 0 ? (
             <div className="text-center py-16 bg-white rounded-3xl shadow-lg">
               <div className="text-6xl mb-4">⏳</div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">Loading more matches...</h3>
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">Loading more buddies...</h3>
               <p className="text-gray-600 mb-6">
-                We're finding great matches for you!
+                We're finding great buddies for you!
               </p>
             </div>
           ) : (
             <>
-              {/* Match Grid */}
-              <MatchGrid
-                matches={suggested}
+              {/* Buddy Grid */}
+              <BuddyGrid
+                buddies={suggested}
                 onSwipe={handleSwipe}
                 currentIndex={currentIndex}
                 onIndexChange={setCurrentIndex}
@@ -256,7 +256,7 @@ function MatchesPageContent() {
                               ? 'bg-[#00D9A5] w-8'
                               : 'bg-gray-300 hover:bg-gray-400'
                           }`}
-                          aria-label={`Go to match ${i + 1}`}
+                          aria-label={`Go to buddy ${i + 1}`}
                         />
                       );
                     })}
@@ -276,7 +276,7 @@ function MatchesPageContent() {
                 {/* Progress Indicator */}
                 <div className="text-center space-y-2">
                   <p className="text-sm text-gray-600">
-                    Showing {Math.min(currentIndex + 1, suggested.length)} of {suggested.length}{hasMore ? '+' : ''} matches
+                    Showing {Math.min(currentIndex + 1, suggested.length)} of {suggested.length}{hasMore ? '+' : ''} buddies
                   </p>
                   <div className="w-full bg-gray-200 rounded-full h-2 max-w-md mx-auto">
                     <div 
@@ -285,10 +285,10 @@ function MatchesPageContent() {
                     />
                   </div>
                   {loadingMore && (
-                    <p className="text-xs text-gray-500 mt-2">Loading more matches...</p>
+                    <p className="text-xs text-gray-500 mt-2">Loading more buddies...</p>
                   )}
                   {!hasMore && currentIndex >= suggested.length - 1 && (
-                    <p className="text-xs text-gray-500 mt-2">No more matches available</p>
+                    <p className="text-xs text-gray-500 mt-2">No more buddies available</p>
                   )}
                 </div>
               </div>
@@ -297,20 +297,20 @@ function MatchesPageContent() {
         </div>
       )}
 
-      {/* My Matches Tab */}
-      {activeTab === 'my-matches' && (
+      {/* My Buddies Tab */}
+      {activeTab === 'my-buddies' && (
         <div className="max-w-4xl mx-auto px-4 py-6">
-          {matches.length === 0 ? (
+          {buddies.length === 0 ? (
             <div className="text-center py-16 bg-white rounded-3xl shadow-lg">
               <div className="text-6xl mb-4">💔</div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">No matches yet</h3>
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">No buddies yet</h3>
               <p className="text-gray-600 mb-6">
                 Start swiping to find your workout buddies!
               </p>
               <button
                 onClick={() => {
                   setActiveTab('discover');
-                  router.push('/matches');
+                  router.push('/buddies');
                 }}
                 className="inline-block bg-[#00D9A5] text-black px-6 py-3 rounded-xl font-semibold hover:bg-[#00B88A] transition-all duration-300 shadow-md hover:shadow-lg"
               >
@@ -319,17 +319,17 @@ function MatchesPageContent() {
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Pending Matches (incoming requests) */}
-              {matches.filter(m => m.status === 'pending' && m.user2_id === user?.id).length > 0 && (
+              {/* Pending Buddies (incoming requests) */}
+              {buddies.filter(m => m.status === 'pending' && m.user2_id === user?.id).length > 0 && (
                 <div className="mb-8">
                   <h2 className="text-xl font-bold text-gray-900 mb-4">Pending Requests</h2>
                   <div className="space-y-3">
-                    {matches
+                    {buddies
                       .filter(m => m.status === 'pending' && m.user2_id === user?.id)
-                      .map((match) => {
-                        const otherUser = match.user1;
+                      .map((buddy) => {
+                        const otherUser = buddy.user1;
                         return (
-                          <div key={match.id} className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
+                          <div key={buddy.id} className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center space-x-4 flex-1">
                                 <div className="w-16 h-16 bg-gradient-to-br from-[#00D9A5] to-[#00B88A] rounded-full flex items-center justify-center text-white font-bold text-xl">
@@ -342,7 +342,7 @@ function MatchesPageContent() {
                                 <div className="flex-1">
                                   <p className="font-bold text-gray-900 text-lg">{otherUser?.full_name || 'Anonymous'}</p>
                                   <p className="text-sm text-gray-600">
-                                    {match.match_score && `${Math.round(match.match_score)}% match`}
+                                    {buddy.match_score && `${Math.round(buddy.match_score)}% buddy`}
                                   </p>
                                 </div>
                               </div>
@@ -350,10 +350,10 @@ function MatchesPageContent() {
                                 <button
                                   onClick={async () => {
                                     try {
-                                      await api.updateMatch(match.id, 'accepted');
+                                      await api.updateBuddy(buddy.id, 'accepted');
                                       await loadData();
                                     } catch (error: any) {
-                                      alert(error.message || 'Failed to accept match');
+                                      alert(error.message || 'Failed to accept buddy');
                                     }
                                   }}
                                   className="px-6 py-2 bg-[#00D9A5] text-black rounded-xl font-semibold hover:bg-[#00B88A] transition-colors"
@@ -363,10 +363,10 @@ function MatchesPageContent() {
                                 <button
                                   onClick={async () => {
                                     try {
-                                      await api.updateMatch(match.id, 'rejected');
+                                      await api.updateBuddy(buddy.id, 'rejected');
                                       await loadData();
                                     } catch (error: any) {
-                                      alert(error.message || 'Failed to reject match');
+                                      alert(error.message || 'Failed to reject buddy');
                                     }
                                   }}
                                   className="px-6 py-2 bg-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-300 transition-colors"
@@ -382,30 +382,30 @@ function MatchesPageContent() {
                 </div>
               )}
 
-              {/* Pending Matches (outgoing likes - people you liked) */}
-              {matches.filter(m => m.status === 'pending' && m.user1_id === user?.id).length > 0 && (
+              {/* Pending Buddies (outgoing likes - people you liked) */}
+              {buddies.filter(m => m.status === 'pending' && m.user1_id === user?.id).length > 0 && (
                 <div className="mb-8">
                   <h2 className="text-xl font-bold text-gray-900 mb-4">People You Liked</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {matches
+                    {buddies
                       .filter(m => m.status === 'pending' && m.user1_id === user?.id)
-                      .map((match) => {
-                        const otherUser = match.user2;
+                      .map((buddy) => {
+                        const otherUser = buddy.user2;
                         return (
-                          <div key={match.id} className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 relative">
+                          <div key={buddy.id} className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 relative">
                             <button
                               onClick={async () => {
-                                if (confirm('Remove this match?')) {
+                                if (confirm('Remove this buddy?')) {
                                   try {
-                                    await api.deleteMatch(match.id);
+                                    await api.deleteBuddy(buddy.id);
                                     await loadData();
                                   } catch (error: any) {
-                                    alert(error.message || 'Failed to remove match');
+                                    alert(error.message || 'Failed to remove buddy');
                                   }
                                 }
                               }}
                               className="absolute top-4 right-4 w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-600 hover:text-gray-800 transition-colors"
-                              aria-label="Remove match"
+                              aria-label="Remove buddy"
                             >
                               <span className="text-lg">×</span>
                             </button>
@@ -443,30 +443,30 @@ function MatchesPageContent() {
                 </div>
               )}
 
-              {/* Accepted Matches */}
-              {matches.filter(m => m.status === 'accepted').length > 0 && (
+              {/* Accepted Buddies */}
+              {buddies.filter(m => m.status === 'accepted').length > 0 && (
                 <div>
-                  <h2 className="text-xl font-bold text-gray-900 mb-4">Your Matches</h2>
+                  <h2 className="text-xl font-bold text-gray-900 mb-4">Your Buddies</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {matches
+                    {buddies
                       .filter(m => m.status === 'accepted')
-                      .map((match) => {
-                        const otherUser = match.user1_id === user?.id ? match.user2 : match.user1;
+                      .map((buddy) => {
+                        const otherUser = buddy.user1_id === user?.id ? buddy.user2 : buddy.user1;
                         return (
-                          <div key={match.id} className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 relative">
+                          <div key={buddy.id} className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 relative">
                             <button
                               onClick={async () => {
-                                if (confirm('Remove this match?')) {
+                                if (confirm('Remove this buddy?')) {
                                   try {
-                                    await api.deleteMatch(match.id);
+                                    await api.deleteBuddy(buddy.id);
                                     await loadData();
                                   } catch (error: any) {
-                                    alert(error.message || 'Failed to remove match');
+                                    alert(error.message || 'Failed to remove buddy');
                                   }
                                 }
                               }}
                               className="absolute top-4 right-4 w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-600 hover:text-gray-800 transition-colors"
-                              aria-label="Remove match"
+                              aria-label="Remove buddy"
                             >
                               <span className="text-lg">×</span>
                             </button>
@@ -485,7 +485,7 @@ function MatchesPageContent() {
                                 <div className="flex-1">
                                   <p className="font-bold text-gray-900 text-lg">{otherUser?.full_name || 'Anonymous'}</p>
                                   <p className="text-sm text-gray-600">
-                                    {match.match_score && `${Math.round(match.match_score)}% match`}
+                                    {buddy.match_score && `${Math.round(buddy.match_score)}% buddy`}
                                     {otherUser?.location && ` • ${otherUser.location}`}
                                   </p>
                                   {otherUser?.sports && otherUser.sports.length > 0 && (
@@ -517,7 +517,7 @@ function MatchesPageContent() {
   );
 }
 
-export default function MatchesPage() {
+export default function BuddiesPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-gray-50">
@@ -528,7 +528,7 @@ export default function MatchesPage() {
         <BottomNav />
       </div>
     }>
-      <MatchesPageContent />
+      <BuddiesPageContent />
     </Suspense>
   );
 }

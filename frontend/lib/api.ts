@@ -1,9 +1,9 @@
-import { Event, Sport, User, Match, GroupChat, Conversation, Goal, Message, GroupMember } from '@/types';
+import { Event, Sport, User, Buddy, GroupChat, Conversation, Goal, Message, GroupMember } from '@/types';
 import {
   mockUsers,
   mockEvents,
-  mockMatches,
-  mockSuggestedMatches,
+  mockBuddies,
+  mockSuggestedBuddies,
   mockConversations,
   mockMessages,
   mockGroupChats,
@@ -17,7 +17,7 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export class ApiClient {
   private token: string | null = null;
-  private localMatches: Match[] = [...mockMatches];
+  private localBuddies: Buddy[] = [...mockBuddies];
   private localMessages: Message[] = [...mockMessages];
   private localEvents: Event[] = [...mockEvents];
   private rsvpEvents: Set<number> = new Set();
@@ -142,27 +142,27 @@ export class ApiClient {
     }
   }
 
-  // Matches
-  async getSuggestedMatches(limit = 10, minScore = 30, offset = 0): Promise<any[]> {
+  // Buddies
+  async getSuggestedBuddies(limit = 10, minScore = 30, offset = 0): Promise<any[]> {
     await delay(300);
-    return mockSuggestedMatches.slice(offset, offset + limit);
+    return mockSuggestedBuddies.slice(offset, offset + limit);
   }
 
-  async getMatches(status?: string): Promise<Match[]> {
+  async getBuddies(status?: string): Promise<Buddy[]> {
     await delay(200);
     if (status) {
-      return this.localMatches.filter(m => m.status === status);
+      return this.localBuddies.filter(m => m.status === status);
     }
-    return this.localMatches;
+    return this.localBuddies;
   }
 
-  async createMatch(user2Id: number): Promise<Match> {
+  async createBuddy(user2Id: number): Promise<Buddy> {
     await delay(300);
     const user2 = mockUsers.find(u => u.id === user2Id);
     if (!user2) throw new Error('User not found');
     
-    const newMatch: Match = {
-      id: this.localMatches.length + 1,
+    const newBuddy: Buddy = {
+      id: this.localBuddies.length + 1,
       user1_id: currentUser.id,
       user2_id: user2Id,
       match_score: 75 + Math.floor(Math.random() * 20),
@@ -171,23 +171,23 @@ export class ApiClient {
       user1: currentUser,
       user2: user2,
     };
-    this.localMatches.push(newMatch);
-    return newMatch;
+    this.localBuddies.push(newBuddy);
+    return newBuddy;
   }
 
-  async updateMatch(matchId: number, status: 'accepted' | 'rejected'): Promise<Match> {
+  async updateBuddy(buddyId: number, status: 'accepted' | 'rejected'): Promise<Buddy> {
     await delay(300);
-    const match = this.localMatches.find(m => m.id === matchId);
-    if (!match) throw new Error('Match not found');
-    match.status = status;
-    return match;
+    const buddy = this.localBuddies.find(m => m.id === buddyId);
+    if (!buddy) throw new Error('Buddy not found');
+    buddy.status = status;
+    return buddy;
   }
 
-  async deleteMatch(matchId: number): Promise<void> {
+  async deleteBuddy(buddyId: number): Promise<void> {
     await delay(300);
-    const index = this.localMatches.findIndex(m => m.id === matchId);
+    const index = this.localBuddies.findIndex(m => m.id === buddyId);
     if (index > -1) {
-      this.localMatches.splice(index, 1);
+      this.localBuddies.splice(index, 1);
     }
   }
 

@@ -1,12 +1,12 @@
 from sqlalchemy.orm import Session
 from typing import List
 from models.user import User
-from models.match import Match, MatchStatus
+from models.buddy import Buddy, BuddyStatus
 
 
-def calculate_match_score(user1: User, user2: User) -> float:
+def calculate_buddy_score(user1: User, user2: User) -> float:
     """
-    Calculate match score between two users based on:
+    Calculate buddy score between two users based on:
     - Sports overlap (40%)
     - Goals overlap (30%)
     - Location proximity (30%)
@@ -48,79 +48,78 @@ def calculate_match_score(user1: User, user2: User) -> float:
     return round(score * 100, 2)  # Return as percentage
 
 
-def find_potential_matches(
+def find_potential_buddies(
     user: User,
     db: Session,
     limit: int = None,
     min_score: float = 30.0
 ) -> List[dict]:
     """
-    Find potential matches for a user
-    Returns all matches sorted by score, limit can be applied by caller
+    Find potential buddies for a user
+    Returns all buddies sorted by score, limit can be applied by caller
     """
-    # Get all users except current user and existing matches
-    existing_match_user_ids = db.query(Match.user2_id).filter(
-        Match.user1_id == user.id
+    # Get all users except current user and existing buddies
+    existing_buddy_user_ids = db.query(Buddy.user2_id).filter(
+        Buddy.user1_id == user.id
     ).union(
-        db.query(Match.user1_id).filter(Match.user2_id == user.id)
+        db.query(Buddy.user1_id).filter(Buddy.user2_id == user.id)
     ).all()
-    existing_match_user_ids = [m[0] for m in existing_match_user_ids]
+    existing_buddy_user_ids = [m[0] for m in existing_buddy_user_ids]
     
     potential_users = db.query(User).filter(
         User.id != user.id,
         User.is_active == True,
-        ~User.id.in_(existing_match_user_ids) if existing_match_user_ids else True
+        ~User.id.in_(existing_buddy_user_ids) if existing_buddy_user_ids else True
     ).all()
     
-    matches = []
+    buddies = []
     for potential_user in potential_users:
-        score = calculate_match_score(user, potential_user)
+        score = calculate_buddy_score(user, potential_user)
         if score >= min_score:
-            matches.append({
+            buddies.append({
                 "user": potential_user,
                 "score": score
             })
     
     # Sort by score descending
-    matches.sort(key=lambda x: x["score"], reverse=True)
+    buddies.sort(key=lambda x: x["score"], reverse=True)
     
     # Apply limit if provided
     if limit:
-        return matches[:limit]
-    return matches
+        return buddies[:limit]
+    return buddies
 
 
-def create_match_request(
+def create_buddy_request(
     user1_id: int,
     user2_id: int,
     db: Session
-) -> Match:
+) -> Buddy:
     """
-    Create a match request
+    Create a buddy request
     """
-    # Check if match already exists
-    existing = db.query(Match).filter(
-        ((Match.user1_id == user1_id) & (Match.user2_id == user2_id)) |
-        ((Match.user1_id == user2_id) & (Match.user2_id == user1_id))
+    # Check if buddy already exists
+    existing = db.query(Buddy).filter(
+        ((Buddy.user1_id == user1_id) & (Buddy.user2_id == user2_id)) |
+        ((Buddy.user1_id == user2_id) & (Buddy.user2_id == user1_id))
     ).first()
     
     if existing:
-        raise ValueError("Match already exists")
+        raise ValueError("Buddy already exists")
     
     # Calculate score
     user1 = db.query(User).filter(User.id == user1_id).first()
     user2 = db.query(User).filter(User.id == user2_id).first()
-    score = calculate_match_score(user1, user2)
+    score = calculate_buddy_score(user1, user2)
     
-    match = Match(
+    buddy = Buddy(
         user1_id=user1_id,
         user2_id=user2_id,
         match_score=score,
-        status=MatchStatus.PENDING
+        status=BuddyStatus.PENDING
     )
-    db.add(match)
+    db.add(buddy)
     db.commit()
-    db.refresh(match)
+    db.refresh(buddy)
     
-    return match
-
+    return buddy

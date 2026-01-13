@@ -12,6 +12,7 @@ export default function RegisterPage() {
   const [fullName, setFullName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
   const { register } = useAuth();
   const router = useRouter();
 
@@ -21,14 +22,63 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      await register(email, password, fullName);
-      router.push('/profile');
+      const result = await register(email, password, fullName);
+      if (result.needsConfirmation) {
+        setShowConfirmation(true);
+      } else {
+        router.push('/profile');
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to register');
     } finally {
       setLoading(false);
     }
   };
+
+  if (showConfirmation) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center px-4">
+        <div className="w-full max-w-md space-y-6">
+          <div className="flex flex-col items-center space-y-3">
+            <Logo size="large" />
+          </div>
+
+          <div className="bg-green-50 border border-green-200 rounded-xl p-6 space-y-4">
+            <div className="text-center">
+              <div className="text-4xl mb-4">📧</div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Check your email</h2>
+              <p className="text-gray-700 mb-4">
+                We've sent a confirmation link to <strong>{email}</strong>
+              </p>
+              <p className="text-sm text-gray-600 mb-6">
+                Please click the link in the email to confirm your account before signing in.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <Link
+                href="/login"
+                className="w-full block bg-[#00D9A5] text-black px-6 py-3 rounded-lg font-bold hover:bg-[#00B88A] transition-colors text-center"
+              >
+                Already confirmed? Sign In
+              </Link>
+              <button
+                onClick={() => {
+                  setShowConfirmation(false);
+                  setEmail('');
+                  setPassword('');
+                  setFullName('');
+                }}
+                className="w-full text-gray-600 hover:text-gray-900 text-sm font-medium"
+              >
+                Use a different email
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center justify-center px-4">
@@ -108,4 +158,3 @@ export default function RegisterPage() {
     </div>
   );
 }
-

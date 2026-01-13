@@ -134,10 +134,10 @@ export default function ProfileModal({ user, score, isOpen, onClose }: ProfileMo
             </div>
           )}
 
-          {/* Match Details */}
+          {/* Buddy Details */}
           <div className="mt-8 pt-6 border-t border-gray-200">
             <div className="bg-[#E6F9F4] rounded-2xl p-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-2">Why you're a great match:</h3>
+              <h3 className="text-sm font-semibold text-gray-700 mb-2">Why you're a great buddy:</h3>
               <ul className="text-sm text-gray-600 space-y-1">
                 {user.location && <li>✓ Located nearby</li>}
                 {user.sports && user.sports.length > 0 && <li>✓ Shared sports interests</li>}

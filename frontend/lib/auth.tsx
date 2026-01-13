@@ -1,16 +1,15 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { api } from './api';
+import { supabase, mapSupabaseUser } from './supabase';
 import { User } from '@/types';
-import { currentUser } from './mockData';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, fullName: string) => Promise<void>;
-  logout: () => void;
+  register: (email: string, password: string, fullName: string) => Promise<{ needsConfirmation: boolean }>;
+  logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
@@ -20,38 +19,140 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Helper to check if user email is confirmed
+  const isEmailConfirmed = (supabaseUser: any): boolean => {
+    return supabaseUser?.email_confirmed_at !== null && supabaseUser?.email_confirmed_at !== undefined;
+  };
+
   useEffect(() => {
-    // Auto-login with mock data
-    api.setToken('mock_token');
-    setUser(currentUser);
-    setLoading(false);
+    // Check active sessions and set up auth state listener
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Session error:', error);
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+
+        if (session?.user) {
+          // Only set user if email is confirmed
+          if (isEmailConfirmed(session.user)) {
+            setUser(mapSupabaseUser(session.user));
+          } else {
+            // User exists but email not confirmed - clear session
+            await supabase.auth.signOut();
+            setUser(null);
+          }
+        } else {
+          setUser(null);
+        }
+      } catch (error) {
+        console.error('Failed to initialize auth:', error);
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
+
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
+      if (session?.user) {
+        // Only set user if email is confirmed
+        if (isEmailConfirmed(session.user)) {
+          setUser(mapSupabaseUser(session.user));
+        } else {
+          // Email not confirmed - don't set user
+          setUser(null);
+        }
+      } else {
+        setUser(null);
+      }
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const refreshUser = async () => {
     try {
-      const userData = await api.getCurrentUser();
-      setUser(userData);
+      const { data: { user: supabaseUser }, error } = await supabase.auth.getUser();
+      if (error) {
+        setUser(null);
+        return;
+      }
+
+      if (supabaseUser && isEmailConfirmed(supabaseUser)) {
+        setUser(mapSupabaseUser(supabaseUser));
+      } else {
+        setUser(null);
+      }
     } catch (error) {
       console.error('Failed to fetch user:', error);
-      api.setToken(null);
       setUser(null);
     }
   };
 
   const login = async (email: string, password: string) => {
-    const response = await api.login(email, password);
-    api.setToken(response.access_token);
-    await refreshUser();
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (data.user) {
+      // Check if email is confirmed
+      if (!isEmailConfirmed(data.user)) {
+        await supabase.auth.signOut();
+        throw new Error('Please confirm your email before signing in. Check your inbox for the confirmation link.');
+      }
+      setUser(mapSupabaseUser(data.user));
+    }
   };
 
   const register = async (email: string, password: string, fullName: string) => {
-    const response = await api.register(email, password, fullName);
-    api.setToken(response.access_token);
-    await refreshUser();
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+        },
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    // Don't set user - they need to confirm email first
+    // Return status to show confirmation message
+    return {
+      needsConfirmation: data.user !== null && !isEmailConfirmed(data.user),
+    };
   };
 
-  const logout = () => {
-    api.setToken(null);
+  const logout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error('Error signing out:', error);
+    }
     setUser(null);
   };
 
@@ -69,4 +170,3 @@ export function useAuth() {
   }
   return context;
 }
-
