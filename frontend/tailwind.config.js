@@ -8,8 +8,8 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        'dots-teal': '#00D9A5',
-        'dots-teal-dark': '#00B88A',
+        'dots-teal': '#0ef9b4',
+        'dots-teal-dark': '#0dd9a0',
         'dots-teal-light': '#E6F9F4',
         'dots-gray': '#4A4A4A',
         'dots-gray-light': '#F5F5F5',

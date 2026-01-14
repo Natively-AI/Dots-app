@@ -1,3 +1,5 @@
+'use client';
+
 import { createClient } from '@supabase/supabase-js';
 import { User } from '@/types';
 
@@ -28,6 +30,9 @@ export function mapSupabaseUser(supabaseUser: any): User | null {
     bio: supabaseUser.user_metadata?.bio || null,
     location: supabaseUser.user_metadata?.location || null,
     avatar_url: supabaseUser.user_metadata?.avatar_url || null,
+    cover_image_url: supabaseUser.user_metadata?.cover_image_url || null,
+    is_discoverable: supabaseUser.user_metadata?.is_discoverable || false,
+    profile_completed: supabaseUser.user_metadata?.profile_completed || false,
     created_at: supabaseUser.created_at || new Date().toISOString(),
     updated_at: supabaseUser.updated_at || null,
   };

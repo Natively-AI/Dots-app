@@ -1,15 +1,23 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException, status
+from supabase import Client
 from typing import List
-from core.database import get_db
-from models.sport import Sport
+from core.database import get_supabase
 
 router = APIRouter(prefix="/sports", tags=["sports"])
 
 
 @router.get("", response_model=List[dict])
-async def list_sports(db: Session = Depends(get_db)):
+async def list_sports():
     """List all available sports"""
-    sports = db.query(Sport).order_by(Sport.name).all()
-    return [{"id": s.id, "name": s.name, "icon": s.icon} for s in sports]
+    try:
+        supabase: Client = get_supabase()
+        result = supabase.table("sports").select("*").order("name").execute()
+        if result.data:
+            return [{"id": s.get("id"), "name": s.get("name"), "icon": s.get("icon")} for s in result.data]
+        return []
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch sports: {str(e)}"
+        )
 

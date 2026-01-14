@@ -3,6 +3,9 @@ from typing import List
 
 
 class Settings(BaseSettings):
+    # Database Configuration
+    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/dots"
+    
     # Supabase Configuration
     SUPABASE_URL: str = ""
     SUPABASE_KEY: str = ""  # Service role key (secret key) for backend operations
@@ -13,8 +16,13 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
-    # CORS
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:3001"]
+    # CORS - Allow all localhost ports for development
+    CORS_ORIGINS: List[str] = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+    ]
     
     # App
     DEBUG: bool = True

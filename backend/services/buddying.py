@@ -69,6 +69,7 @@ def find_potential_buddies(
     potential_users = db.query(User).filter(
         User.id != user.id,
         User.is_active == True,
+        User.is_discoverable == True,  # Only discoverable users
         ~User.id.in_(existing_buddy_user_ids) if existing_buddy_user_ids else True
     ).all()
     

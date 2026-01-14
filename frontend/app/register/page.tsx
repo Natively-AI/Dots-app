@@ -58,7 +58,7 @@ export default function RegisterPage() {
             <div className="space-y-3">
               <Link
                 href="/login"
-                className="w-full block bg-[#00D9A5] text-black px-6 py-3 rounded-lg font-bold hover:bg-[#00B88A] transition-colors text-center"
+                className="w-full block bg-[#0ef9b4] text-black px-6 py-3 rounded-lg font-bold hover:bg-[#0dd9a0] transition-colors text-center"
               >
                 Already confirmed? Sign In
               </Link>
@@ -103,7 +103,7 @@ export default function RegisterPage() {
               name="fullName"
               type="text"
               required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00D9A5] focus:border-transparent"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0ef9b4] focus:border-transparent"
               placeholder="Full Name"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
@@ -117,7 +117,7 @@ export default function RegisterPage() {
               type="email"
               autoComplete="email"
               required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00D9A5] focus:border-transparent"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0ef9b4] focus:border-transparent"
               placeholder="Email address"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -131,7 +131,7 @@ export default function RegisterPage() {
               type="password"
               autoComplete="new-password"
               required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00D9A5] focus:border-transparent"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0ef9b4] focus:border-transparent"
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -141,7 +141,7 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[#00D9A5] text-black px-6 py-4 rounded-lg font-bold hover:bg-[#00B88A] transition-colors disabled:opacity-50"
+            className="w-full bg-[#0ef9b4] text-black px-6 py-4 rounded-lg font-bold hover:bg-[#0dd9a0] transition-colors disabled:opacity-50"
           >
             {loading ? 'Creating account...' : 'JOIN'}
           </button>
@@ -150,7 +150,7 @@ export default function RegisterPage() {
         {/* Sign In Link */}
         <div className="text-center">
           <span className="text-sm text-gray-700">Returning user? </span>
-          <Link href="/login" className="text-sm font-medium text-[#00D9A5] hover:text-[#00B88A]">
+          <Link href="/login" className="text-sm font-medium text-[#0ef9b4] hover:text-[#0dd9a0]">
             Sign In
           </Link>
         </div>

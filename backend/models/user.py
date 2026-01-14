@@ -22,8 +22,11 @@ class User(Base):
     bio = Column(Text, nullable=True)
     location = Column(String, nullable=True)
     avatar_url = Column(String, nullable=True)
+    cover_image_url = Column(String, nullable=True)
     role = Column(SQLEnum(UserRole), default=UserRole.USER)
     is_active = Column(Boolean, default=True)
+    is_discoverable = Column(Boolean, default=False)  # Can be discovered and discover others
+    profile_completed = Column(Boolean, default=False)  # Has completed onboarding
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -38,4 +41,7 @@ class User(Base):
     received_buddies = relationship("Buddy", foreign_keys="Buddy.user2_id", back_populates="user2")
     subscription = relationship("Subscription", back_populates="user", uselist=False)
     group_chats = relationship("GroupChat", secondary="group_members", back_populates="members")
+    posts = relationship("Post", back_populates="user")
+    likes = relationship("Like", back_populates="user")
+    photos = relationship("UserPhoto", back_populates="user", cascade="all, delete-orphan")
 

@@ -39,7 +39,7 @@ export default function EventCardLarge({ event }: EventCardLargeProps) {
     'Hiking': { icon: '🥾', gradient: 'from-green-500 to-teal-600' },
   };
 
-  const sportStyle = event.sport ? sportStyles[event.sport.name] || { icon: '🏃', gradient: 'from-[#00D9A5] to-[#00B88A]' } : { icon: '🏃', gradient: 'from-[#00D9A5] to-[#00B88A]' };
+  const sportStyle = event.sport ? sportStyles[event.sport.name] || { icon: '🏃', gradient: 'from-[#0ef9b4] to-[#0dd9a0]' } : { icon: '🏃', gradient: 'from-[#0ef9b4] to-[#0dd9a0]' };
 
   return (
     <Link href={`/events/${event.id}`}>
@@ -91,7 +91,7 @@ export default function EventCardLarge({ event }: EventCardLargeProps) {
 
         {/* Event Content */}
         <div className="p-8">
-          <h3 className="font-bold text-xl text-gray-900 mb-3 line-clamp-2 group-hover:text-[#00D9A5] transition-colors duration-300">
+          <h3 className="font-bold text-xl text-gray-900 mb-3 line-clamp-2 group-hover:text-[#0ef9b4] transition-colors duration-300">
             {event.title}
           </h3>
           
@@ -108,7 +108,7 @@ export default function EventCardLarge({ event }: EventCardLargeProps) {
             </div>
             
             {event.sport && (
-              <span className="px-3 py-1.5 bg-[#E6F9F4] text-[#00B88A] rounded-full text-xs font-semibold">
+              <span className="px-3 py-1.5 bg-[#E6F9F4] text-[#0dd9a0] rounded-full text-xs font-semibold">
                 {event.sport.name}
               </span>
             )}

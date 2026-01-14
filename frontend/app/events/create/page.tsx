@@ -168,7 +168,7 @@ export default function CreateEventPage() {
             <button
               type="submit"
               disabled={saving}
-              className="px-6 py-3 bg-[#00D9A5] text-black rounded-lg font-medium hover:bg-[#00B88A] transition-colors disabled:opacity-50"
+              className="px-6 py-3 bg-[#0ef9b4] text-black rounded-lg font-medium hover:bg-[#0dd9a0] transition-colors disabled:opacity-50"
             >
               {saving ? 'Creating...' : 'Create Event'}
             </button>

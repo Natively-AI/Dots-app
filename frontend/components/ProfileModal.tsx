@@ -51,7 +51,7 @@ export default function ProfileModal({ user, score, isOpen, onClose }: ProfileMo
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header with Image */}
-        <div className="relative h-64 bg-gradient-to-br from-[#00D9A5] via-[#00B88A] to-[#00D9A5] flex items-center justify-center">
+        <div className="relative h-64 bg-gradient-to-br from-[#0ef9b4] via-[#0dd9a0] to-[#0ef9b4] flex items-center justify-center">
           {user.avatar_url ? (
             <img 
               src={user.avatar_url} 
@@ -107,7 +107,7 @@ export default function ProfileModal({ user, score, isOpen, onClose }: ProfileMo
                 {user.sports.map((sport) => (
                   <span
                     key={sport.id}
-                    className="px-4 py-2 bg-[#E6F9F4] text-[#00B88A] rounded-full text-sm font-semibold"
+                    className="px-4 py-2 bg-[#E6F9F4] text-[#0dd9a0] rounded-full text-sm font-semibold"
                   >
                     {sport.icon && <span className="mr-1">{sport.icon}</span>}
                     {sport.name}

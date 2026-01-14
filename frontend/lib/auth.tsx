@@ -40,7 +40,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (session?.user) {
           // Only set user if email is confirmed
           if (isEmailConfirmed(session.user)) {
-            setUser(mapSupabaseUser(session.user));
+            // Fetch full user profile from API
+            try {
+              const { api } = await import('./api');
+              const fullUser = await api.getCurrentUser();
+              setUser(fullUser);
+            } catch (apiError: any) {
+              // Fallback to mapped user if API fails (e.g., backend not running)
+              console.warn('Failed to fetch full user profile from API, using Supabase user data:', apiError.message);
+              setUser(mapSupabaseUser(session.user));
+            }
           } else {
             // User exists but email not confirmed - clear session
             await supabase.auth.signOut();
@@ -72,7 +81,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         // Only set user if email is confirmed
         if (isEmailConfirmed(session.user)) {
-          setUser(mapSupabaseUser(session.user));
+          // Fetch full user profile from API
+          import('./api').then(({ api }) => {
+            api.getCurrentUser().then(fullUser => {
+              setUser(fullUser);
+            }).catch(() => {
+              // Fallback to mapped user if API fails
+              setUser(mapSupabaseUser(session.user));
+            });
+          });
         } else {
           // Email not confirmed - don't set user
           setUser(null);
@@ -94,8 +111,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      if (supabaseUser && isEmailConfirmed(supabaseUser)) {
-        setUser(mapSupabaseUser(supabaseUser));
+          if (supabaseUser && isEmailConfirmed(supabaseUser)) {
+            // Fetch full user profile from API
+            try {
+              const { api } = await import('./api');
+              const fullUser = await api.getCurrentUser();
+              setUser(fullUser);
+            } catch (apiError: any) {
+              // Fallback to mapped user if API fails (e.g., backend not running)
+              console.warn('Failed to fetch full user profile from API, using Supabase user data:', apiError.message);
+              setUser(mapSupabaseUser(supabaseUser));
+            }
       } else {
         setUser(null);
       }
@@ -121,7 +147,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await supabase.auth.signOut();
         throw new Error('Please confirm your email before signing in. Check your inbox for the confirmation link.');
       }
-      setUser(mapSupabaseUser(data.user));
+      // Fetch full user profile from API
+      try {
+        const { api } = await import('./api');
+        const fullUser = await api.getCurrentUser();
+        setUser(fullUser);
+      } catch (apiError) {
+        // Fallback to mapped user if API fails
+        setUser(mapSupabaseUser(data.user));
+      }
     }
   };
 

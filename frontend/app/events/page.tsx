@@ -7,8 +7,10 @@ import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import BottomNav from '@/components/BottomNav';
 import EventCardLarge from '@/components/EventCardLarge';
+import EventsCalendar from '@/components/EventsCalendar';
 import SearchBar from '@/components/SearchBar';
 import FilterChips from '@/components/FilterChips';
+import { Skeleton } from '@/components/SkeletonLoader';
 import { api } from '@/lib/api';
 import { Event, Sport } from '@/types';
 import Link from 'next/link';
@@ -33,7 +35,7 @@ export default function EventsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSport, setSelectedSport] = useState<number | null>(null);
   const [locationFilter, setLocationFilter] = useState('');
-  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'map' | 'calendar'>('list');
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
@@ -111,10 +113,42 @@ export default function EventsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
         <Navbar />
-        <div className="flex items-center justify-center h-64">
-          <div className="text-gray-600">Loading...</div>
+        <div className="bg-gradient-to-br from-[#0ef9b4] via-[#0dd9a0] to-[#0ef9b4] pt-12 pb-16">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-12">
+              <Skeleton className="h-12 w-96 mx-auto mb-6" />
+              <Skeleton className="h-6 w-80 mx-auto" />
+            </div>
+            <div className="max-w-3xl mx-auto space-y-6">
+              <Skeleton className="h-12 w-full" />
+              <div className="flex gap-2">
+                {[1, 2, 3, 4].map(i => (
+                  <Skeleton key={i} className="h-8 w-20" />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="flex items-center justify-between mb-10">
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-10 w-32" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {[1, 2, 3, 4, 5, 6].map(i => (
+              <div key={i} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                <Skeleton className="h-48 w-full" />
+                <div className="p-6">
+                  <Skeleton className="h-6 w-3/4 mb-3" />
+                  <Skeleton className="h-4 w-full mb-2" />
+                  <Skeleton className="h-4 w-2/3 mb-4" />
+                  <Skeleton className="h-10 w-32" />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
         <BottomNav />
       </div>
@@ -126,7 +160,7 @@ export default function EventsPage() {
       <Navbar />
       
       {/* Hero Section */}
-      <div className="bg-gradient-to-br from-[#00D9A5] via-[#00B88A] to-[#00D9A5] pt-12 pb-16">
+      <div className="bg-gradient-to-br from-[#0ef9b4] via-[#0dd9a0] to-[#0ef9b4] pt-12 pb-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h1 className="text-4xl md:text-5xl font-bold text-white mb-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -176,28 +210,47 @@ export default function EventsPage() {
             <div className="flex items-center bg-white rounded-xl p-1 shadow-md border border-gray-200">
               <button
                 onClick={() => setViewMode('list')}
-                className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-300 ${
+                className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-300 flex items-center gap-2 ${
                   viewMode === 'list'
-                    ? 'bg-[#00D9A5] text-black shadow-sm'
+                    ? 'bg-[#0ef9b4] text-black shadow-sm'
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                📋 List
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                </svg>
+                List
+              </button>
+              <button
+                onClick={() => setViewMode('calendar')}
+                className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-300 flex items-center gap-2 ${
+                  viewMode === 'calendar'
+                    ? 'bg-[#0ef9b4] text-black shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Calendar
               </button>
               <button
                 onClick={() => setViewMode('map')}
-                className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-300 ${
+                className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-300 flex items-center gap-2 ${
                   viewMode === 'map'
-                    ? 'bg-[#00D9A5] text-black shadow-sm'
+                    ? 'bg-[#0ef9b4] text-black shadow-sm'
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                🗺️ Map
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+                Map
               </button>
             </div>
             <Link 
               href="/events/create" 
-              className="bg-[#00D9A5] text-black px-6 py-2.5 rounded-xl font-semibold hover:bg-[#00B88A] transition-all duration-300 shadow-md hover:shadow-lg"
+              className="bg-[#0ef9b4] text-black px-6 py-2.5 rounded-xl font-semibold hover:bg-[#0dd9a0] transition-all duration-300 shadow-md hover:shadow-lg"
             >
               + Create Event
             </Link>
@@ -207,7 +260,11 @@ export default function EventsPage() {
         {/* Events Grid or Map */}
         {events.length === 0 ? (
           <div className="text-center py-16 animate-in fade-in duration-500">
-            <div className="text-6xl mb-4">🎯</div>
+            <div className="w-16 h-16 mx-auto mb-4 bg-gray-200 rounded-full flex items-center justify-center">
+              <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
             <h3 className="text-2xl font-bold text-gray-900 mb-2">
               {searchQuery || selectedSport || locationFilter ? 'No events found' : 'No events yet'}
             </h3>
@@ -218,10 +275,14 @@ export default function EventsPage() {
             </p>
             <Link 
               href="/events/create" 
-              className="inline-block bg-[#00D9A5] text-black px-6 py-3 rounded-xl font-semibold hover:bg-[#00B88A] transition-all duration-300 shadow-md hover:shadow-lg"
+              className="inline-block bg-[#0ef9b4] text-black px-6 py-3 rounded-xl font-semibold hover:bg-[#0dd9a0] transition-all duration-300 shadow-md hover:shadow-lg"
             >
               Create Your First Event
             </Link>
+          </div>
+        ) : viewMode === 'calendar' ? (
+          <div className="animate-in fade-in duration-500">
+            <EventsCalendar events={events} />
           </div>
         ) : viewMode === 'map' ? (
           <div className="animate-in fade-in duration-500">

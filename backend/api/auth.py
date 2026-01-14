@@ -1,42 +1,112 @@
 from datetime import timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from supabase import Client
 from sqlalchemy.orm import Session
-from core.database import get_db
+from core.database import get_supabase, get_db
 from core.security import verify_password, get_password_hash, create_access_token
 from core.config import settings
 from schemas.auth import UserRegister, Token
 from models.user import User
+from typing import Optional
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
 
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    from core.security import verify_token
-    payload = verify_token(token)
-    if payload is None:
+def get_current_user(
+    authorization: Optional[str] = Header(None),
+    token: Optional[str] = Depends(oauth2_scheme)
+) -> dict:
+    """Get current user from Supabase JWT token"""
+    # Get token from header or oauth2_scheme
+    token_str = None
+    if authorization:
+        # Extract token from "Bearer <token>"
+        parts = authorization.split()
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            token_str = parts[1]
+    elif token:
+        token_str = token
+    
+    if not token_str:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
+            detail="Not authenticated",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    email: str = payload.get("sub")
-    if email is None:
+    
+    # Verify token with Supabase
+    try:
+        supabase: Client = get_supabase()
+        user_response = supabase.auth.get_user(token_str)
+        if not user_response or not user_response.user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        supabase_user = user_response.user
+        
+        # Get user data from Supabase database
+        user_data_result = supabase.table("users").select("*").eq("email", supabase_user.email).execute()
+        
+        if not user_data_result.data or len(user_data_result.data) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found in database"
+            )
+        
+        return user_data_result.data[0]
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
+            detail=f"Authentication failed: {str(e)}",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    user = db.query(User).filter(User.email == email).first()
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return user
+
+
+def get_current_user_optional(
+    authorization: Optional[str] = Header(None),
+    token: Optional[str] = Depends(oauth2_scheme)
+) -> Optional[dict]:
+    """Get current user from Supabase JWT token (optional - returns None if not authenticated)"""
+    # Get token from header or oauth2_scheme
+    token_str = None
+    if authorization:
+        # Extract token from "Bearer <token>"
+        parts = authorization.split()
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            token_str = parts[1]
+    elif token:
+        token_str = token
+    
+    if not token_str:
+        return None
+    
+    # Verify token with Supabase (return None on any error for optional auth)
+    try:
+        supabase: Client = get_supabase()
+        user_response = supabase.auth.get_user(token_str)
+        if not user_response or not user_response.user:
+            return None
+        
+        supabase_user = user_response.user
+        
+        # Get user data from Supabase database
+        user_data_result = supabase.table("users").select("*").eq("email", supabase_user.email).execute()
+        
+        if not user_data_result.data or len(user_data_result.data) == 0:
+            return None
+        
+        return user_data_result.data[0]
+    except Exception:
+        # Return None on any error for optional auth
+        return None
 
 
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)

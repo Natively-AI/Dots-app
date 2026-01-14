@@ -145,7 +145,7 @@ function MessagesPageContent() {
           selectedConversation ? 'hidden md:flex' : 'flex'
         }`}>
           {/* Sidebar Header */}
-          <div className="bg-gradient-to-r from-[#00D9A5] to-[#00B88A] px-6 py-5 flex items-center justify-between shadow-md">
+          <div className="bg-gradient-to-r from-[#0ef9b4] to-[#0dd9a0] px-6 py-5 flex items-center justify-between shadow-md">
             <h1 className="text-xl font-bold text-black">Chats</h1>
             <button
               onClick={() => setShowNewChat(true)}
@@ -159,11 +159,13 @@ function MessagesPageContent() {
           {/* Search Bar */}
           <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
               <input
                 type="text"
                 placeholder="Search or start new chat"
-                className="w-full pl-10 pr-4 py-2.5 bg-white rounded-2xl text-sm border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#00D9A5] focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2.5 bg-white rounded-2xl text-sm border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0ef9b4] focus:border-transparent"
               />
             </div>
           </div>
@@ -188,13 +190,13 @@ function MessagesPageContent() {
                       router.push(`/messages?id=${conv.id}&type=${conv.type}`);
                     }}
                     className={`w-full p-4 text-left border-b border-gray-100 hover:bg-[#E6F9F4] transition-colors ${
-                      isSelected ? 'bg-[#E6F9F4] border-l-4 border-l-[#00D9A5]' : 'bg-white'
+                      isSelected ? 'bg-[#E6F9F4] border-l-4 border-l-[#0ef9b4]' : 'bg-white'
                     }`}
                   >
                     <div className="flex items-center space-x-3">
                       {/* Avatar */}
                       <div className="relative flex-shrink-0">
-                        <div className="w-12 h-12 bg-gradient-to-br from-[#00D9A5] to-[#00B88A] rounded-full flex items-center justify-center text-white font-semibold overflow-hidden">
+                        <div className="w-12 h-12 bg-gradient-to-br from-[#0ef9b4] to-[#0dd9a0] rounded-full flex items-center justify-center text-white font-semibold overflow-hidden">
                           {conv.avatar_url ? (
                             <img 
                               src={conv.avatar_url} 
@@ -206,7 +208,7 @@ function MessagesPageContent() {
                           )}
                         </div>
                         {conv.type === 'group' && (
-                          <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-[#00D9A5] rounded-full border-2 border-white flex items-center justify-center">
+                          <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-[#0ef9b4] rounded-full border-2 border-white flex items-center justify-center">
                             <span className="text-xs">👥</span>
                           </div>
                         )}
@@ -227,7 +229,7 @@ function MessagesPageContent() {
                             {conv.last_message.content || 'No messages'}
                           </p>
                           {conv.unread_count > 0 && (
-                            <span className="bg-[#00D9A5] text-black text-xs rounded-full w-5 h-5 flex items-center justify-center font-semibold ml-2 flex-shrink-0">
+                            <span className="bg-[#0ef9b4] text-black text-xs rounded-full w-5 h-5 flex items-center justify-center font-semibold ml-2 flex-shrink-0">
                               {conv.unread_count}
                             </span>
                           )}
@@ -248,7 +250,7 @@ function MessagesPageContent() {
           {selectedConversation ? (
             <>
               {/* Chat Header */}
-              <div className="bg-gradient-to-r from-[#00D9A5] to-[#00B88A] px-6 py-4 flex items-center justify-between shadow-lg">
+              <div className="bg-gradient-to-r from-[#0ef9b4] to-[#0dd9a0] px-6 py-4 flex items-center justify-between shadow-lg">
                 <div className="flex items-center space-x-3 flex-1 min-w-0">
                   <button
                     onClick={() => {
@@ -259,7 +261,7 @@ function MessagesPageContent() {
                   >
                     ←
                   </button>
-                  <div className="w-10 h-10 bg-gradient-to-br from-[#00D9A5] to-[#00B88A] rounded-full flex items-center justify-center text-white font-semibold overflow-hidden flex-shrink-0">
+                  <div className="w-10 h-10 bg-gradient-to-br from-[#0ef9b4] to-[#0dd9a0] rounded-full flex items-center justify-center text-white font-semibold overflow-hidden flex-shrink-0">
                     {selectedConv?.avatar_url ? (
                       <img 
                         src={selectedConv.avatar_url} 
@@ -324,7 +326,7 @@ function MessagesPageContent() {
                     return (
                       <div key={message.id} className={`flex items-end space-x-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
                         {!isMe && showAvatar && (
-                          <div className="w-8 h-8 bg-gradient-to-br from-[#00D9A5] to-[#00B88A] rounded-full flex items-center justify-center text-white text-xs font-semibold overflow-hidden flex-shrink-0">
+                          <div className="w-8 h-8 bg-gradient-to-br from-[#0ef9b4] to-[#0dd9a0] rounded-full flex items-center justify-center text-white text-xs font-semibold overflow-hidden flex-shrink-0">
                             {message.sender?.avatar_url ? (
                               <img 
                                 src={message.sender.avatar_url} 
@@ -392,7 +394,7 @@ function MessagesPageContent() {
                   <button
                     type="submit"
                     disabled={!newMessage.trim()}
-                    className="w-12 h-12 bg-[#00D9A5] text-black rounded-full flex items-center justify-center hover:bg-[#00B88A] transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-md"
+                    className="w-12 h-12 bg-[#0ef9b4] text-black rounded-full flex items-center justify-center hover:bg-[#0dd9a0] transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-md"
                   >
                     <span className="text-xl">➤</span>
                   </button>

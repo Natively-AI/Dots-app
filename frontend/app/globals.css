@@ -3,8 +3,8 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
-  --dots-teal: #00D9A5;
-  --dots-teal-dark: #00B88A;
+  --dots-teal: #0ef9b4;
+  --dots-teal-dark: #0dd9a0;
   --dots-teal-light: #E6F9F4;
 }
 
@@ -38,12 +38,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #00D9A5;
+  background: #0ef9b4;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #00B88A;
+  background: #0dd9a0;
 }
 
 /* Hide scrollbar for filter chips */

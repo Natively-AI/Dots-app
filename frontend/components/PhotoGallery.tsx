@@ -15,7 +15,7 @@ export default function PhotoGallery({ photos, initials, onPhotoClick }: PhotoGa
   // If no photos or error, show placeholder
   if (!photos || photos.length === 0 || imageError) {
     return (
-      <div className="w-full h-full bg-gradient-to-br from-[#00D9A5] via-[#00B88A] to-[#00D9A5] flex items-center justify-center" style={{ height: '100%', minHeight: '550px' }}>
+      <div className="w-full h-full bg-gradient-to-br from-[#0ef9b4] via-[#0dd9a0] to-[#0ef9b4] flex items-center justify-center" style={{ height: '100%', minHeight: '550px' }}>
         <div className="w-40 h-40 bg-white/20 rounded-full flex items-center justify-center text-white text-6xl font-bold backdrop-blur-sm">
           {initials}
         </div>
@@ -40,7 +40,7 @@ export default function PhotoGallery({ photos, initials, onPhotoClick }: PhotoGa
 
   return (
     <div 
-      className="relative w-full h-full bg-gradient-to-br from-[#00D9A5] via-[#00B88A] to-[#00D9A5] overflow-hidden cursor-pointer"
+      className="relative w-full h-full bg-gradient-to-br from-[#0ef9b4] via-[#0dd9a0] to-[#0ef9b4] overflow-hidden cursor-pointer"
       style={{ height: '100%', minHeight: '550px' }}
       onClick={onPhotoClick}
     >

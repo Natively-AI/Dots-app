@@ -11,6 +11,8 @@ class EventBase(BaseModel):
     start_time: datetime
     end_time: Optional[datetime] = None
     max_participants: Optional[int] = None
+    is_public: bool = True
+    cover_image_url: Optional[str] = None
 
 
 class EventCreate(EventBase):
@@ -26,6 +28,8 @@ class EventUpdate(BaseModel):
     end_time: Optional[datetime] = None
     max_participants: Optional[int] = None
     is_cancelled: Optional[bool] = None
+    is_public: Optional[bool] = None
+    cover_image_url: Optional[str] = None
 
 
 class EventResponse(EventBase):
@@ -36,6 +40,7 @@ class EventResponse(EventBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
     participant_count: int = 0
+    pending_requests_count: int = 0  # For private events
     
     class Config:
         from_attributes = True

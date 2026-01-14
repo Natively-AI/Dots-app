@@ -10,6 +10,7 @@ class UserBase(BaseModel):
     bio: Optional[str] = None
     location: Optional[str] = None
     avatar_url: Optional[str] = None
+    cover_image_url: Optional[str] = None
 
 
 class UserCreate(UserBase):
@@ -22,12 +23,16 @@ class UserUpdate(BaseModel):
     bio: Optional[str] = None
     location: Optional[str] = None
     avatar_url: Optional[str] = None
+    cover_image_url: Optional[str] = None
     sport_ids: Optional[List[int]] = None
     goal_ids: Optional[List[int]] = None
+    is_discoverable: Optional[bool] = None
 
 
 class UserResponse(UserBase):
     id: int
+    is_discoverable: bool = False
+    profile_completed: bool = False
     created_at: datetime
     updated_at: Optional[datetime] = None
     
@@ -38,4 +43,9 @@ class UserResponse(UserBase):
 class UserProfile(UserResponse):
     sports: List[dict] = []
     goals: List[dict] = []
+    photos: List[dict] = []
+
+
+class CompleteProfileRequest(BaseModel):
+    is_discoverable: bool
 

@@ -18,7 +18,7 @@ interface BuddyGridProps {
     };
     score: number;
   }>;
-  onSwipe: (direction: 'left' | 'right', userId: number) => void;
+  onSwipe: (direction: 'left' | 'right', userId: number, userData?: any) => void;
   currentIndex: number;
   onIndexChange: (index: number) => void;
 }
@@ -32,10 +32,12 @@ export default function BuddyGrid({ buddies, onSwipe, currentIndex, onIndexChang
     setIsModalOpen(true);
   };
 
-  const handleSwipe = (direction: 'left' | 'right', userId: number, index: number) => {
-    onSwipe(direction, userId);
-    // Auto-advance to next card if we liked
-    if (direction === 'right' && index < buddies.length - 1) {
+  const handleSwipe = (direction: 'left' | 'right', userId: number, index: number, userData?: any) => {
+    const buddy = buddies[index];
+    const userInfo = userData || buddy?.user;
+    onSwipe(direction, userId, userInfo);
+    // Auto-advance to next card if we passed
+    if (direction === 'left' && index < buddies.length - 1) {
       setTimeout(() => {
         onIndexChange(index + 1);
       }, 300);
@@ -62,7 +64,7 @@ export default function BuddyGrid({ buddies, onSwipe, currentIndex, onIndexChang
                 <SwipeableCard
                   user={buddy.user}
                   score={buddy.score}
-                  onSwipe={(direction) => handleSwipe(direction, buddy.user.id, actualIndex)}
+                  onSwipe={(direction) => handleSwipe(direction, buddy.user.id, actualIndex, buddy.user)}
                   onViewProfile={() => handleViewProfile(buddy)}
                   index={0}
                   total={1}
@@ -73,7 +75,7 @@ export default function BuddyGrid({ buddies, onSwipe, currentIndex, onIndexChang
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleSwipe('left', buddy.user.id, actualIndex);
+                    handleSwipe('left', buddy.user.id, actualIndex, buddy.user);
                   }}
                   className="flex-1 py-2.5 bg-white/95 backdrop-blur-md rounded-xl shadow-lg border border-red-200 text-red-500 font-semibold hover:bg-red-50 transition-colors text-sm"
                 >
@@ -82,11 +84,11 @@ export default function BuddyGrid({ buddies, onSwipe, currentIndex, onIndexChang
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleSwipe('right', buddy.user.id, actualIndex);
+                    handleSwipe('right', buddy.user.id, actualIndex, buddy.user);
                   }}
-                  className="flex-1 py-2.5 bg-[#00D9A5] text-black rounded-xl font-semibold hover:bg-[#00B88A] transition-colors shadow-lg text-sm"
+                  className="flex-1 py-2.5 bg-[#0ef9b4] text-black rounded-xl font-semibold hover:bg-[#0dd9a0] transition-colors shadow-lg text-sm"
                 >
-                  Like
+                  Connect
                 </button>
               </div>
             </div>

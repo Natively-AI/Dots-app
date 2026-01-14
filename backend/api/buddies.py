@@ -24,9 +24,18 @@ async def get_suggested_buddies(
     db: Session = Depends(get_db)
 ):
     """Get suggested buddies for current user with pagination"""
+    # Check if user is discoverable
+    if not current_user.is_discoverable:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You must enable discovery to find buddies"
+        )
+    # Only show discoverable users
     # Get all potential buddies (no limit, sorted by score)
     # Lower min_score to 20 to ensure we always have buddies
     all_buddies = find_potential_buddies(current_user, db, limit=None, min_score=min_score)
+    # Filter to only discoverable users
+    all_buddies = [b for b in all_buddies if b["user"].is_discoverable]
     
     # If we don't have enough buddies, lower the threshold even more
     if len(all_buddies) < offset + limit:

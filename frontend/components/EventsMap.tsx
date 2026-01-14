@@ -66,7 +66,7 @@ const geocodeLocation = (location: string): { lat: number; lng: number } | null 
 };
 
 // Custom marker icon
-const createCustomIcon = (color: string = '#00D9A5') => {
+const createCustomIcon = (color: string = '#0ef9b4') => {
   return L.divIcon({
     className: 'custom-marker',
     html: `
@@ -186,7 +186,7 @@ export default function EventsMap({ events, userLocation }: EventsMapProps) {
           <Marker
             key={event.id}
             position={[lat, lng]}
-            icon={createCustomIcon('#00D9A5')}
+            icon={createCustomIcon('#0ef9b4')}
           >
             <Popup>
               <div className="p-2 min-w-[200px]">
@@ -195,7 +195,7 @@ export default function EventsMap({ events, userLocation }: EventsMapProps) {
                   <div className="flex-1">
                     <Link
                       href={`/events/${event.id}`}
-                      className="font-bold text-gray-900 hover:text-[#00D9A5] transition-colors"
+                      className="font-bold text-gray-900 hover:text-[#0ef9b4] transition-colors"
                     >
                       {event.title}
                     </Link>
@@ -220,7 +220,7 @@ export default function EventsMap({ events, userLocation }: EventsMapProps) {
                 )}
                 <Link
                   href={`/events/${event.id}`}
-                  className="mt-2 inline-block text-xs bg-[#00D9A5] text-black px-3 py-1 rounded-lg font-semibold hover:bg-[#00B88A] transition-colors"
+                  className="mt-2 inline-block text-xs bg-[#0ef9b4] text-black px-3 py-1 rounded-lg font-semibold hover:bg-[#0dd9a0] transition-colors"
                 >
                   View Event →
                 </Link>

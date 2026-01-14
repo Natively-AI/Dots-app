@@ -103,7 +103,7 @@ export default function GroupSettingsPage() {
         {/* Group Info Card */}
         <div className="bg-white rounded-3xl shadow-lg p-6 mb-6">
           <div className="flex items-center space-x-4 mb-6">
-            <div className="w-20 h-20 bg-gradient-to-br from-[#00D9A5] to-[#00B88A] rounded-full flex items-center justify-center text-white text-3xl font-bold overflow-hidden">
+            <div className="w-20 h-20 bg-gradient-to-br from-[#0ef9b4] to-[#0dd9a0] rounded-full flex items-center justify-center text-white text-3xl font-bold overflow-hidden">
               {group.avatar_url ? (
                 <img src={group.avatar_url} alt={group.name} className="w-full h-full object-cover" />
               ) : (
@@ -117,20 +117,20 @@ export default function GroupSettingsPage() {
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#00D9A5]"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0ef9b4]"
                     placeholder="Group name"
                   />
                   <textarea
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#00D9A5]"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0ef9b4]"
                     placeholder="Group description"
                     rows={3}
                   />
                   <div className="flex space-x-2">
                     <button
                       onClick={handleUpdate}
-                      className="px-4 py-2 bg-[#00D9A5] text-black rounded-xl font-semibold hover:bg-[#00B88A] transition-colors"
+                      className="px-4 py-2 bg-[#0ef9b4] text-black rounded-xl font-semibold hover:bg-[#0dd9a0] transition-colors"
                     >
                       Save
                     </button>
@@ -154,7 +154,7 @@ export default function GroupSettingsPage() {
                   {isAdmin && (
                     <button
                       onClick={() => setEditing(true)}
-                      className="mt-2 text-[#00B88A] hover:text-[#00D9A5] text-sm font-semibold"
+                      className="mt-2 text-[#0dd9a0] hover:text-[#0ef9b4] text-sm font-semibold"
                     >
                       Edit Group Info
                     </button>
@@ -174,7 +174,7 @@ export default function GroupSettingsPage() {
             {isAdmin && (
               <button
                 onClick={() => router.push(`/messages/groups/${groupId}/add-members`)}
-                className="px-4 py-2 bg-[#00D9A5] text-black rounded-xl font-semibold hover:bg-[#00B88A] transition-colors text-sm"
+                className="px-4 py-2 bg-[#0ef9b4] text-black rounded-xl font-semibold hover:bg-[#0dd9a0] transition-colors text-sm"
               >
                 + Add Members
               </button>
@@ -185,7 +185,7 @@ export default function GroupSettingsPage() {
             {group.members?.map((member) => (
               <div key={member.id} className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 transition-colors">
                 <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-gradient-to-br from-[#00D9A5] to-[#00B88A] rounded-full flex items-center justify-center text-white font-semibold overflow-hidden">
+                  <div className="w-12 h-12 bg-gradient-to-br from-[#0ef9b4] to-[#0dd9a0] rounded-full flex items-center justify-center text-white font-semibold overflow-hidden">
                     {member.avatar_url ? (
                       <img src={member.avatar_url} alt={member.full_name || ''} className="w-full h-full object-cover" />
                     ) : (
@@ -196,7 +196,7 @@ export default function GroupSettingsPage() {
                     <p className="font-semibold text-gray-900">
                       {member.full_name || 'Anonymous'}
                       {member.is_admin && (
-                        <span className="ml-2 text-xs bg-[#E6F9F4] text-[#00B88A] px-2 py-0.5 rounded-full">Admin</span>
+                        <span className="ml-2 text-xs bg-[#E6F9F4] text-[#0dd9a0] px-2 py-0.5 rounded-full">Admin</span>
                       )}
                     </p>
                     {member.id === group.created_by_id && (

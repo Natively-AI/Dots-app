@@ -5,6 +5,25 @@ const nextConfig: NextConfig = {
     // Don't fail build on type errors during deployment
     ignoreBuildErrors: false,
   },
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'picsum.photos',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.supabase.co',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.supabase.in',
+        pathname: '/**',
+      },
+    ],
+  },
 };
 
 export default nextConfig;

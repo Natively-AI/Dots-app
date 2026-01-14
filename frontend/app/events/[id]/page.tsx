@@ -113,7 +113,7 @@ export default function EventDetailPage() {
     'Hiking': { icon: '🥾', gradient: 'from-green-500 to-teal-600' },
   };
 
-  const sportStyle = event.sport ? sportStyles[event.sport.name] || { icon: '🏃', gradient: 'from-[#00D9A5] to-[#00B88A]' } : { icon: '🏃', gradient: 'from-[#00D9A5] to-[#00B88A]' };
+  const sportStyle = event.sport ? sportStyles[event.sport.name] || { icon: '🏃', gradient: 'from-[#0ef9b4] to-[#0dd9a0]' } : { icon: '🏃', gradient: 'from-[#0ef9b4] to-[#0dd9a0]' };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -232,7 +232,7 @@ export default function EventDetailPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {event.participants.map(participant => (
                     <div key={participant.id} className="flex items-center space-x-3 p-3 rounded-xl hover:bg-gray-50 transition-colors">
-                      <div className="w-12 h-12 bg-gradient-to-br from-[#00D9A5] to-[#00B88A] rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
+                      <div className="w-12 h-12 bg-gradient-to-br from-[#0ef9b4] to-[#0dd9a0] rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
                         {participant.avatar_url ? (
                           <img src={participant.avatar_url} alt={participant.full_name || ''} className="w-12 h-12 rounded-full object-cover" />
                         ) : (
@@ -243,7 +243,7 @@ export default function EventDetailPage() {
                         <p className="font-semibold text-gray-900 truncate">
                           {participant.full_name || 'Anonymous'}
                           {participant.id === event.host_id && (
-                            <span className="ml-2 text-xs bg-[#E6F9F4] text-[#00B88A] px-2 py-0.5 rounded-full font-medium">Host</span>
+                            <span className="ml-2 text-xs bg-[#E6F9F4] text-[#0dd9a0] px-2 py-0.5 rounded-full font-medium">Host</span>
                           )}
                         </p>
                         {participant.location && (
@@ -266,7 +266,7 @@ export default function EventDetailPage() {
                 <div className="space-y-4">
                   {isParticipant ? (
                     <>
-                      <div className="flex items-center space-x-2 text-[#00B88A] mb-4">
+                      <div className="flex items-center space-x-2 text-[#0dd9a0] mb-4">
                         <span className="text-2xl">✓</span>
                         <span className="font-semibold">You're going!</span>
                       </div>
@@ -282,7 +282,7 @@ export default function EventDetailPage() {
                     <button
                       onClick={handleRsvp}
                       disabled={rsvping || (event.max_participants ? event.participant_count >= event.max_participants : false)}
-                      className="w-full px-6 py-4 bg-[#00D9A5] text-black rounded-xl font-bold text-lg hover:bg-[#00B88A] transition-colors disabled:opacity-50 shadow-lg hover:shadow-xl"
+                      className="w-full px-6 py-4 bg-[#0ef9b4] text-black rounded-xl font-bold text-lg hover:bg-[#0dd9a0] transition-colors disabled:opacity-50 shadow-lg hover:shadow-xl"
                     >
                       {rsvping ? 'RSVPing...' : 'RSVP to Event'}
                     </button>

@@ -6,10 +6,14 @@ export interface User {
   bio: string | null;
   location: string | null;
   avatar_url: string | null;
+  cover_image_url?: string | null;
+  is_discoverable?: boolean;
+  profile_completed?: boolean;
   created_at: string;
   updated_at: string | null;
   sports?: Sport[];
   goals?: Goal[];
+  photos?: UserPhoto[];
 }
 
 export interface Sport {
@@ -35,10 +39,14 @@ export interface Event {
   end_time: string | null;
   max_participants: number | null;
   is_cancelled: boolean;
+  is_public?: boolean;
   image_url: string | null;
+  cover_image_url?: string | null;
   created_at: string;
   updated_at: string | null;
   participant_count: number;
+  pending_requests_count?: number;
+  rsvp_status?: 'pending' | 'approved' | 'rejected';
   sport?: Sport;
   host?: User;
   participants?: User[];
@@ -101,3 +109,26 @@ export interface GroupChat {
   created_by?: GroupMember;
 }
 
+export interface Post {
+  id: number;
+  user_id: number;
+  content: string;
+  image_url: string | null;
+  created_at: string;
+  updated_at: string | null;
+  like_count: number;
+  is_liked: boolean;
+  user?: {
+    id: number;
+    full_name: string | null;
+    avatar_url: string | null;
+  };
+}
+
+export interface UserPhoto {
+  id: number;
+  user_id: number;
+  photo_url: string;
+  display_order: number;
+  created_at: string;
+}

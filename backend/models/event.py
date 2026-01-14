@@ -1,7 +1,15 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Table
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Table, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+import enum
 from core.database import Base
+
+
+class RSVPStatus(str, enum.Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
 
 # Association table for event participants
 event_rsvps = Table(
@@ -10,6 +18,7 @@ event_rsvps = Table(
     Column("event_id", Integer, ForeignKey("events.id"), primary_key=True),
     Column("user_id", Integer, ForeignKey("users.id"), primary_key=True),
     Column("attended", Boolean, default=False),
+    Column("status", SQLEnum(RSVPStatus), default=RSVPStatus.APPROVED),  # For private events
     Column("rsvp_at", DateTime(timezone=True), server_default=func.now()),
 )
 
@@ -27,7 +36,9 @@ class Event(Base):
     end_time = Column(DateTime(timezone=True), nullable=True)
     max_participants = Column(Integer, nullable=True)
     is_cancelled = Column(Boolean, default=False)
+    is_public = Column(Boolean, default=True)  # Public events: anyone can RSVP, Private: requires approval
     image_url = Column(String, nullable=True)
+    cover_image_url = Column(String, nullable=True)  # Cover image for event
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

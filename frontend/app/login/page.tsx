@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Logo from '@/components/Logo';
 
-export default function LoginPage() {
+function LoginPageContent() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -62,7 +62,7 @@ export default function LoginPage() {
               type="email"
               autoComplete="email"
               required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00D9A5] focus:border-transparent"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0ef9b4] focus:border-transparent"
               placeholder="Email address"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -76,7 +76,7 @@ export default function LoginPage() {
               type="password"
               autoComplete="current-password"
               required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00D9A5] focus:border-transparent"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0ef9b4] focus:border-transparent"
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -86,7 +86,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[#00D9A5] text-black px-6 py-4 rounded-lg font-bold hover:bg-[#00B88A] transition-colors disabled:opacity-50"
+            className="w-full bg-[#0ef9b4] text-black px-6 py-4 rounded-lg font-bold hover:bg-[#0dd9a0] transition-colors disabled:opacity-50"
           >
             {loading ? 'Signing in...' : 'SIGN IN'}
           </button>
@@ -95,11 +95,29 @@ export default function LoginPage() {
         {/* Sign Up Link */}
         <div className="text-center">
           <span className="text-sm text-gray-700">New user? </span>
-          <Link href="/register" className="text-sm font-medium text-[#00D9A5] hover:text-[#00B88A]">
+          <Link href="/register" className="text-sm font-medium text-[#0ef9b4] hover:text-[#0dd9a0]">
             Join
           </Link>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center px-4">
+        <div className="w-full max-w-sm space-y-8">
+          <div className="flex flex-col items-center space-y-3">
+            <Logo size="large" />
+            <p className="text-gray-700 text-sm font-medium">Meet. Move. Motivate.</p>
+          </div>
+          <div className="text-center text-gray-500">Loading...</div>
+        </div>
+      </div>
+    }>
+      <LoginPageContent />
+    </Suspense>
   );
 }

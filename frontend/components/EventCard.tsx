@@ -44,7 +44,7 @@ export default function EventCard({ event }: EventCardProps) {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow">
         <div className="flex items-start space-x-4">
           {/* Circular thumbnail */}
-          <div className="w-16 h-16 bg-gradient-to-br from-[#00D9A5] to-[#00B88A] rounded-full flex items-center justify-center text-2xl flex-shrink-0">
+          <div className="w-16 h-16 bg-gradient-to-br from-[#0ef9b4] to-[#0dd9a0] rounded-full flex items-center justify-center text-2xl flex-shrink-0">
             {sportIcon}
           </div>
           

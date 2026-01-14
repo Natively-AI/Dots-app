@@ -146,10 +146,10 @@ export default function SwipeableCard({ user, score, onSwipe, onViewProfile, ind
         {/* Swipe indicators */}
         {position.x > 50 && (
           <div 
-            className="absolute inset-0 bg-[#00D9A5]/20 flex items-center justify-center z-10 rounded-3xl"
+            className="absolute inset-0 bg-[#0ef9b4]/20 flex items-center justify-center z-10 rounded-3xl"
             style={{ opacity: getSwipeOpacity() }}
           >
-            <div className="text-6xl font-bold text-[#00D9A5] transform rotate-12">✓</div>
+            <div className="text-6xl font-bold text-[#0ef9b4] transform rotate-12">✓</div>
           </div>
         )}
         {position.x < -50 && (
@@ -178,7 +178,7 @@ export default function SwipeableCard({ user, score, onSwipe, onViewProfile, ind
           
           {/* Avatar Badge */}
           <div className="absolute top-4 left-4 z-10">
-            <div className="w-16 h-16 bg-white/95 backdrop-blur-md rounded-full flex items-center justify-center text-[#00D9A5] text-2xl font-bold shadow-lg border-2 border-white/30">
+            <div className="w-16 h-16 bg-white/95 backdrop-blur-md rounded-full flex items-center justify-center text-[#0ef9b4] text-2xl font-bold shadow-lg border-2 border-white/30">
               {user.avatar_url ? (
                 <img 
                   src={user.avatar_url} 
@@ -186,7 +186,7 @@ export default function SwipeableCard({ user, score, onSwipe, onViewProfile, ind
                   className="w-full h-full rounded-full object-cover"
                 />
               ) : (
-                <span className="text-[#00B88A]">{initials}</span>
+                <span className="text-[#0dd9a0]">{initials}</span>
               )}
             </div>
           </div>
@@ -197,7 +197,7 @@ export default function SwipeableCard({ user, score, onSwipe, onViewProfile, ind
               {user.badges.map((badge, idx) => (
                 <div
                   key={idx}
-                  className="px-3 py-1.5 bg-white/95 backdrop-blur-md rounded-lg text-xs font-semibold text-[#00B88A] flex items-center gap-1.5 shadow-lg"
+                  className="px-3 py-1.5 bg-white/95 backdrop-blur-md rounded-lg text-xs font-semibold text-[#0dd9a0] flex items-center gap-1.5 shadow-lg"
                   title={badge.name}
                 >
                   <span>{badge.icon}</span>
@@ -299,7 +299,7 @@ export default function SwipeableCard({ user, score, onSwipe, onViewProfile, ind
                 {user.sports.map((sport) => (
                   <span
                     key={sport.id}
-                    className="px-4 py-2 bg-[#E6F9F4] text-[#00B88A] rounded-full text-sm font-semibold flex items-center gap-2"
+                    className="px-4 py-2 bg-[#E6F9F4] text-[#0dd9a0] rounded-full text-sm font-semibold flex items-center gap-2"
                   >
                     {sport.icon && <span>{sport.icon}</span>}
                     <span>{sport.name}</span>

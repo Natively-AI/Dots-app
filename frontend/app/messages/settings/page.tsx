@@ -59,7 +59,7 @@ export default function MessagesSettingsPage() {
               <button
                 onClick={() => handleToggle('messageSounds')}
                 className={`w-12 h-6 rounded-full transition-colors ${
-                  notifications.messageSounds ? 'bg-[#00D9A5]' : 'bg-gray-300'
+                  notifications.messageSounds ? 'bg-[#0ef9b4]' : 'bg-gray-300'
                 }`}
               >
                 <div
@@ -78,7 +78,7 @@ export default function MessagesSettingsPage() {
               <button
                 onClick={() => handleToggle('messagePreview')}
                 className={`w-12 h-6 rounded-full transition-colors ${
-                  notifications.messagePreview ? 'bg-[#00D9A5]' : 'bg-gray-300'
+                  notifications.messagePreview ? 'bg-[#0ef9b4]' : 'bg-gray-300'
                 }`}
               >
                 <div
@@ -97,7 +97,7 @@ export default function MessagesSettingsPage() {
               <button
                 onClick={() => handleToggle('groupNotifications')}
                 className={`w-12 h-6 rounded-full transition-colors ${
-                  notifications.groupNotifications ? 'bg-[#00D9A5]' : 'bg-gray-300'
+                  notifications.groupNotifications ? 'bg-[#0ef9b4]' : 'bg-gray-300'
                 }`}
               >
                 <div
@@ -118,7 +118,7 @@ export default function MessagesSettingsPage() {
             <div className="p-4 rounded-xl hover:bg-gray-50 transition-colors">
               <p className="font-semibold text-gray-900 mb-1">Last Seen</p>
               <p className="text-sm text-gray-500">Control who can see when you were last active</p>
-              <select className="mt-2 w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#00D9A5]">
+              <select className="mt-2 w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0ef9b4]">
                 <option>Everyone</option>
                 <option>My Contacts</option>
                 <option>Nobody</option>
@@ -128,7 +128,7 @@ export default function MessagesSettingsPage() {
             <div className="p-4 rounded-xl hover:bg-gray-50 transition-colors">
               <p className="font-semibold text-gray-900 mb-1">Read Receipts</p>
               <p className="text-sm text-gray-500">Let others know when you've read their messages</p>
-              <select className="mt-2 w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#00D9A5]">
+              <select className="mt-2 w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0ef9b4]">
                 <option>On</option>
                 <option>Off</option>
               </select>
