@@ -81,11 +81,11 @@ export class ApiClient {
       if (error.name === 'AbortError') {
         throw new Error('Request timeout - please check your connection');
       }
-      if (error.message === 'Failed to fetch' || error.message.includes('fetch')) {
-        // Backend not available - throw error with helpful message
-        console.warn('Backend not available for getCurrentUser:', this.baseUrl);
-        throw new Error('Backend server is not running. Please start the backend server.');
-      }
+          if (error.message === 'Failed to fetch' || error.message.includes('fetch')) {
+            // Backend not available - throw error with user-friendly message
+            console.warn('Backend not available for getCurrentUser:', this.baseUrl);
+            throw new Error('Unable to connect to the server. Please check your connection.');
+          }
       // Re-throw other errors
       throw error;
     }
@@ -121,9 +121,9 @@ export class ApiClient {
       if (error.name === 'AbortError') {
         throw new Error('Request timeout - please check your connection');
       }
-      if (error.message === 'Failed to fetch' || error.message.includes('fetch')) {
-        throw new Error('Backend server is not running. Please start the backend server.');
-      }
+          if (error.message === 'Failed to fetch' || error.message.includes('fetch')) {
+            throw new Error('Unable to connect to the server. Please check your connection.');
+          }
       throw error;
     }
   }
@@ -174,9 +174,9 @@ export class ApiClient {
       if (error.name === 'AbortError') {
         throw new Error('Request timeout - the server may be slow or unavailable. Please try again.');
       }
-      if (error.message === 'Failed to fetch' || error.message.includes('fetch')) {
-        throw new Error('Backend server is not running. Please start the backend server to update your profile.');
-      }
+          if (error.message === 'Failed to fetch' || error.message.includes('fetch')) {
+            throw new Error('Unable to connect to the server. Please check your connection.');
+          }
       throw error;
     }
   }
@@ -297,67 +297,172 @@ export class ApiClient {
       if (error.name === 'AbortError') {
         throw new Error('Request timeout - the server may be slow or unavailable. Please try again.');
       }
-      if (error.message === 'Failed to fetch' || error.message.includes('fetch')) {
-        throw new Error('Backend server is not running. Please start the backend server to complete your profile.');
-      }
+          if (error.message === 'Failed to fetch' || error.message.includes('fetch')) {
+            throw new Error('Unable to connect to the server. Please check your connection.');
+          }
       throw error;
     }
   }
 
   // Events
   async getEvents(params?: { sport_id?: number; location?: string; search?: string }): Promise<Event[]> {
-    await delay(300);
-    let events = [...this.localEvents];
-    
-    if (params?.sport_id) {
-      events = events.filter(e => e.sport_id === params.sport_id);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const queryParams = new URLSearchParams();
+      if (params?.sport_id) {
+        queryParams.append('sport_id', params.sport_id.toString());
+      }
+      if (params?.location) {
+        queryParams.append('location', params.location);
+      }
+      if (params?.search) {
+        queryParams.append('search', params.search);
+      }
+
+      const queryString = queryParams.toString();
+      const url = `${this.baseUrl}/events${queryString ? `?${queryString}` : ''}`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Failed to fetch events');
+        console.error('getEvents error:', errorText);
+        throw new Error(errorText || 'Failed to fetch events');
+      }
+
+      return response.json();
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - please check your connection');
+      }
+      if (error.message === 'Failed to fetch' || error.message.includes('fetch')) {
+        console.warn('Backend not available for getEvents, returning empty array');
+        return [];
+      }
+      console.error('getEvents error:', error);
+      throw error;
     }
-    if (params?.location) {
-      events = events.filter(e => e.location.toLowerCase().includes(params.location!.toLowerCase()));
-    }
-    if (params?.search) {
-      const search = params.search.toLowerCase();
-      events = events.filter(e => 
-        e.title.toLowerCase().includes(search) ||
-        e.description?.toLowerCase().includes(search) ||
-        e.location.toLowerCase().includes(search) ||
-        e.sport?.name.toLowerCase().includes(search)
-      );
-    }
-    
-    return events;
   }
 
   async getEvent(eventId: number): Promise<Event> {
-    await delay(200);
-    const event = this.localEvents.find(e => e.id === eventId);
-    if (!event) throw new Error('Event not found');
-    return event;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const response = await fetch(`${this.baseUrl}/events/${eventId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Failed to fetch event');
+        console.error('getEvent error:', errorText);
+        throw new Error(errorText || 'Failed to fetch event');
+      }
+
+      return response.json();
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - please check your connection');
+      }
+      if (error.message === 'Failed to fetch' || error.message.includes('fetch')) {
+        console.warn('Backend not available for getEvent');
+        throw new Error('Failed to fetch event');
+      }
+      console.error('getEvent error:', error);
+      throw error;
+    }
   }
 
   async createEvent(data: any): Promise<Event> {
-    await delay(300);
-    const newEvent: Event = {
-      id: this.localEvents.length + 1,
-      ...data,
-      participant_count: 0,
-      is_cancelled: false,
-      created_at: new Date().toISOString(),
-      updated_at: null,
-      sport: mockSports.find(s => s.id === data.sport_id),
-      host: currentUser,
-      participants: [],
-    };
-    this.localEvents.push(newEvent);
-    return newEvent;
+    const token = await this.getToken();
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const response = await fetch(`${this.baseUrl}/events`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Failed to create event' }));
+        throw new Error(error.detail || 'Failed to create event');
+      }
+
+      return response.json();
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - please check your connection');
+      }
+      throw error;
+    }
   }
 
   async updateEvent(eventId: number, data: any): Promise<Event> {
-    await delay(300);
-    const event = this.localEvents.find(e => e.id === eventId);
-    if (!event) throw new Error('Event not found');
-    Object.assign(event, data, { updated_at: new Date().toISOString() });
-    return event;
+    const token = await this.getToken();
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const response = await fetch(`${this.baseUrl}/events/${eventId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Failed to update event' }));
+        throw new Error(error.detail || 'Failed to update event');
+      }
+
+      return response.json();
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - please check your connection');
+      }
+      throw error;
+    }
   }
 
   async rsvpEvent(eventId: number): Promise<Event> {
@@ -534,16 +639,88 @@ export class ApiClient {
 
   // Buddies
   async getSuggestedBuddies(limit = 10, minScore = 30, offset = 0): Promise<any[]> {
-    await delay(300);
-    return mockSuggestedBuddies.slice(offset, offset + limit);
+    const token = await this.getToken();
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    try {
+      const queryParams = new URLSearchParams();
+      queryParams.append('limit', limit.toString());
+      queryParams.append('min_score', minScore.toString());
+      queryParams.append('offset', offset.toString());
+
+      const response = await fetch(`${this.baseUrl}/buddies/suggested?${queryParams.toString()}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Failed to fetch suggested buddies');
+        console.error('getSuggestedBuddies error:', errorText);
+        throw new Error(errorText || 'Failed to fetch suggested buddies');
+      }
+
+      return response.json();
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - please check your connection');
+      }
+      if (error.message === 'Failed to fetch' || error.message.includes('fetch')) {
+        console.warn('Backend not available for getSuggestedBuddies, returning empty array');
+        return [];
+      }
+      console.error('getSuggestedBuddies error:', error);
+      throw error;
+    }
   }
 
   async getBuddies(status?: string): Promise<Buddy[]> {
-    await delay(200);
-    if (status) {
-      return this.localBuddies.filter(m => m.status === status);
+    const token = await this.getToken();
+    if (!token) {
+      throw new Error('Not authenticated');
     }
-    return this.localBuddies;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    try {
+      let url = `${this.baseUrl}/buddies`;
+      if (status) {
+        url += `?status=${status}`;
+      }
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch buddies');
+      }
+
+      return response.json();
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - please check your connection');
+      }
+      throw error;
+    }
   }
 
   async createBuddy(user2Id: number, message?: string): Promise<Buddy> {
@@ -615,25 +792,90 @@ export class ApiClient {
 
   // Messages
   async getConversations(): Promise<Conversation[]> {
-    await delay(300);
-    return mockConversations;
+    const token = await this.getToken();
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const response = await fetch(`${this.baseUrl}/messages/conversations`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Failed to fetch conversations');
+        console.error('getConversations error:', errorText);
+        throw new Error(errorText || 'Failed to fetch conversations');
+      }
+
+      return response.json();
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - please check your connection');
+      }
+      if (error.message === 'Failed to fetch' || error.message.includes('fetch')) {
+        console.warn('Backend not available for getConversations, returning empty array');
+        return [];
+      }
+      console.error('getConversations error:', error);
+      throw error;
+    }
   }
 
   async getConversation(conversationId: number, type: 'user' | 'event' | 'group' = 'user'): Promise<Message[]> {
-    await delay(200);
-    if (type === 'user') {
-      return this.localMessages.filter(m => 
-        (m.receiver_id === conversationId && m.sender_id === currentUser.id) ||
-        (m.sender_id === conversationId && m.receiver_id === currentUser.id)
-      ).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-    } else if (type === 'event') {
-      return this.localMessages.filter(m => m.event_id === conversationId)
-        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-    } else if (type === 'group') {
-      return this.localMessages.filter(m => m.group_id === conversationId)
-        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    const token = await this.getToken();
+    if (!token) {
+      throw new Error('Not authenticated');
     }
-    return [];
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const queryParams = new URLSearchParams();
+      queryParams.append('conversation_type', type);
+
+      const response = await fetch(`${this.baseUrl}/messages/conversations/${conversationId}?${queryParams.toString()}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Failed to fetch conversation');
+        console.error('getConversation error:', errorText);
+        throw new Error(errorText || 'Failed to fetch conversation');
+      }
+
+      return response.json();
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - please check your connection');
+      }
+      if (error.message === 'Failed to fetch' || error.message.includes('fetch')) {
+        console.warn('Backend not available for getConversation, returning empty array');
+        return [];
+      }
+      console.error('getConversation error:', error);
+      throw error;
+    }
   }
 
   async sendMessage(data: { content: string; receiver_id?: number; event_id?: number; group_id?: number }): Promise<Message> {
@@ -675,83 +917,269 @@ export class ApiClient {
 
   // Group Chats
   async getGroups(): Promise<GroupChat[]> {
-    await delay(200);
-    return mockGroupChats;
+    const token = await this.getToken();
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const response = await fetch(`${this.baseUrl}/groups`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Failed to fetch groups');
+        console.error('getGroups error:', errorText);
+        throw new Error(errorText || 'Failed to fetch groups');
+      }
+
+      return response.json();
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - please check your connection');
+      }
+      if (error.message === 'Failed to fetch' || error.message.includes('fetch')) {
+        console.warn('Backend not available for getGroups, returning empty array');
+        return [];
+      }
+      console.error('getGroups error:', error);
+      throw error;
+    }
   }
 
   async getGroup(groupId: number): Promise<GroupChat> {
-    await delay(200);
-    const group = mockGroupChats.find(g => g.id === groupId);
-    if (!group) throw new Error('Group not found');
-    return group;
+    const token = await this.getToken();
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const response = await fetch(`${this.baseUrl}/groups/${groupId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Failed to fetch group');
+        console.error('getGroup error:', errorText);
+        throw new Error(errorText || 'Failed to fetch group');
+      }
+
+      return response.json();
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - please check your connection');
+      }
+      if (error.message === 'Failed to fetch' || error.message.includes('fetch')) {
+        console.warn('Backend not available for getGroup');
+        throw new Error('Failed to fetch group');
+      }
+      console.error('getGroup error:', error);
+      throw error;
+    }
   }
 
   async createGroup(data: { name: string; description?: string; member_ids: number[] }): Promise<GroupChat> {
-    await delay(300);
-    const newGroup: GroupChat = {
-      id: mockGroupChats.length + 1,
-      name: data.name,
-      description: data.description || null,
-      avatar_url: `https://picsum.photos/seed/group${mockGroupChats.length + 1}/400/400`,
-      created_by_id: currentUser.id,
-      created_at: new Date().toISOString(),
-      updated_at: null,
-      members: [
-        { id: currentUser.id, full_name: currentUser.full_name, avatar_url: currentUser.avatar_url, is_admin: true },
-        ...data.member_ids.map(id => {
-          const user = mockUsers.find(u => u.id === id);
-          return user ? { id: user.id, full_name: user.full_name, avatar_url: user.avatar_url, is_admin: false } : null;
-        }).filter((m): m is GroupMember => m !== null),
-      ],
-      created_by: { id: currentUser.id, full_name: currentUser.full_name, avatar_url: currentUser.avatar_url, is_admin: true },
-    };
-    mockGroupChats.push(newGroup);
-    return newGroup;
+    const token = await this.getToken();
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const response = await fetch(`${this.baseUrl}/groups`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Failed to create group' }));
+        throw new Error(error.detail || 'Failed to create group');
+      }
+
+      return response.json();
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - please check your connection');
+      }
+      throw error;
+    }
   }
 
   async updateGroup(groupId: number, data: { name?: string; description?: string; avatar_url?: string }): Promise<GroupChat> {
-    await delay(300);
-    const group = mockGroupChats.find(g => g.id === groupId);
-    if (!group) throw new Error('Group not found');
-    Object.assign(group, data, { updated_at: new Date().toISOString() });
-    return group;
+    const token = await this.getToken();
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const response = await fetch(`${this.baseUrl}/groups/${groupId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Failed to update group' }));
+        throw new Error(error.detail || 'Failed to update group');
+      }
+
+      return response.json();
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - please check your connection');
+      }
+      throw error;
+    }
   }
 
   async addGroupMembers(groupId: number, user_ids: number[]): Promise<void> {
-    await delay(300);
-    const group = mockGroupChats.find(g => g.id === groupId);
-    if (group) {
-      if (!group.members) {
-        group.members = [];
-      }
-      user_ids.forEach(id => {
-        const user = mockUsers.find(u => u.id === id);
-        if (user && !group.members!.some(m => m.id === id)) {
-          group.members!.push({ id: user.id, full_name: user.full_name, avatar_url: user.avatar_url, is_admin: false });
-        }
+    const token = await this.getToken();
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const response = await fetch(`${this.baseUrl}/groups/${groupId}/members`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ user_ids }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Failed to add members' }));
+        throw new Error(error.detail || 'Failed to add members');
+      }
+
+      return;
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - please check your connection');
+      }
+      throw error;
     }
   }
 
   async removeGroupMember(groupId: number, userId: number): Promise<void> {
-    await delay(300);
-    const group = mockGroupChats.find(g => g.id === groupId);
-    if (group && group.members) {
-      const index = group.members.findIndex(m => m.id === userId);
-      if (index > -1) {
-        group.members.splice(index, 1);
+    const token = await this.getToken();
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const response = await fetch(`${this.baseUrl}/groups/${groupId}/members/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Failed to remove member' }));
+        throw new Error(error.detail || 'Failed to remove member');
       }
+
+      return;
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - please check your connection');
+      }
+      throw error;
     }
   }
 
   async leaveGroup(groupId: number): Promise<void> {
-    await delay(300);
-    const group = mockGroupChats.find(g => g.id === groupId);
-    if (group && group.members) {
-      const index = group.members.findIndex(m => m.id === currentUser.id);
-      if (index > -1) {
-        group.members.splice(index, 1);
+    const token = await this.getToken();
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const response = await fetch(`${this.baseUrl}/groups/${groupId}/leave`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Failed to leave group' }));
+        throw new Error(error.detail || 'Failed to leave group');
       }
+
+      return;
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - please check your connection');
+      }
+      throw error;
     }
   }
 

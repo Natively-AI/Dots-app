@@ -90,29 +90,64 @@ async def get_current_user_profile(
 @router.get("/search", response_model=List[UserProfile])
 async def search_users(
     q: str = Query(..., min_length=1, description="Search query"),
-    limit: int = Query(20, ge=1, le=50),
-    db: Session = Depends(get_db)
+    limit: int = Query(20, ge=1, le=50)
 ):
     """Search for users by name, location, or bio"""
-    query = db.query(User).filter(User.is_active == True)
-    
-    search_term = f"%{q.lower()}%"
-    query = query.filter(
-        or_(
-            User.full_name.ilike(search_term),
-            User.location.ilike(search_term),
-            User.bio.ilike(search_term)
+    try:
+        supabase: Client = get_supabase()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Supabase connection error: {str(e)}"
         )
-    )
     
-    users = query.limit(limit).all()
+    # Search in Supabase - we'll need to filter in Python since Supabase doesn't support OR directly
+    try:
+        # Get all active users and filter in Python
+        users_result = supabase.table("users").select("*").eq("is_active", True).limit(limit * 3).execute()
+        users = users_result.data if users_result.data else []
+    except Exception:
+        users = []
+    
+    # Filter by search term (name, location, or bio)
+    search_lower = q.lower()
+    filtered_users = [
+        u for u in users
+        if search_lower in (u.get("full_name") or "").lower() or
+           search_lower in (u.get("location") or "").lower() or
+           search_lower in (u.get("bio") or "").lower()
+    ][:limit]
     
     result = []
-    for user in users:
+    for user in filtered_users:
+        user_id = user.get("id")
+        
+        # Get sports
+        sports = []
+        try:
+            sports_result = supabase.table("user_sports").select("sport_id, sports(*)").eq("user_id", user_id).execute()
+            if sports_result.data:
+                for item in sports_result.data:
+                    if item.get("sports"):
+                        sports.append(item["sports"])
+        except Exception:
+            pass
+        
+        # Get goals
+        goals = []
+        try:
+            goals_result = supabase.table("user_goals").select("goal_id, goals(*)").eq("user_id", user_id).execute()
+            if goals_result.data:
+                for item in goals_result.data:
+                    if item.get("goals"):
+                        goals.append(item["goals"])
+        except Exception:
+            pass
+        
         result.append({
-            **UserResponse.model_validate(user).model_dump(),
-            "sports": [{"id": s.id, "name": s.name, "icon": s.icon} for s in user.sports],
-            "goals": [{"id": g.id, "name": g.name} for g in user.goals]
+            **{k: v for k, v in user.items() if k not in ["sports", "goals"]},
+            "sports": [{"id": s.get("id"), "name": s.get("name"), "icon": s.get("icon")} for s in sports],
+            "goals": [{"id": g.get("id"), "name": g.get("name")} for g in goals]
         })
     
     return result
@@ -120,20 +155,59 @@ async def search_users(
 
 @router.get("/{user_id}", response_model=UserProfile)
 async def get_user_profile(
-    user_id: int,
-    db: Session = Depends(get_db)
+    user_id: int
 ):
     """Get a user's profile by ID"""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
+    try:
+        supabase: Client = get_supabase()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Supabase connection error: {str(e)}"
+        )
+    
+    try:
+        user_result = supabase.table("users").select("*").eq("id", user_id).single().execute()
+        if not user_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        user = user_result.data
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
+    
+    # Get sports
+    sports = []
+    try:
+        sports_result = supabase.table("user_sports").select("sport_id, sports(*)").eq("user_id", user_id).execute()
+        if sports_result.data:
+            for item in sports_result.data:
+                if item.get("sports"):
+                    sports.append(item["sports"])
+    except Exception:
+        pass
+    
+    # Get goals
+    goals = []
+    try:
+        goals_result = supabase.table("user_goals").select("goal_id, goals(*)").eq("user_id", user_id).execute()
+        if goals_result.data:
+            for item in goals_result.data:
+                if item.get("goals"):
+                    goals.append(item["goals"])
+    except Exception:
+        pass
+    
     return {
-        **UserResponse.model_validate(user).model_dump(),
-        "sports": [{"id": s.id, "name": s.name} for s in user.sports],
-        "goals": [{"id": g.id, "name": g.name} for g in user.goals]
+        **{k: v for k, v in user.items() if k not in ["sports", "goals"]},
+        "sports": [{"id": s.get("id"), "name": s.get("name"), "icon": s.get("icon")} for s in sports],
+        "goals": [{"id": g.get("id"), "name": g.get("name")} for g in goals]
     }
 
 
@@ -242,24 +316,43 @@ async def add_user_photo(
 @router.delete("/me/photos/{photo_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user_photo(
     photo_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: dict = Depends(get_current_user)
 ):
     """Delete a user photo"""
-    photo = db.query(UserPhoto).filter(
-        UserPhoto.id == photo_id,
-        UserPhoto.user_id == current_user.id
-    ).first()
-    
-    if not photo:
+    try:
+        supabase: Client = get_supabase()
+    except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Photo not found"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Supabase connection error: {str(e)}"
         )
     
-    db.delete(photo)
-    db.commit()
-    return None
+    user_id = current_user.get("id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User ID not found"
+        )
+    
+    try:
+        # Get photo and verify it belongs to user
+        photo_result = supabase.table("user_photos").select("id, user_id").eq("id", photo_id).eq("user_id", user_id).single().execute()
+        if not photo_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Photo not found"
+            )
+        
+        # Delete photo
+        supabase.table("user_photos").delete().eq("id", photo_id).eq("user_id", user_id).execute()
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete photo: {str(e)}"
+        )
 
 
 @router.post("/me/complete-profile", response_model=UserProfile)

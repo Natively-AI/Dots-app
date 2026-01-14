@@ -11,8 +11,10 @@ import PostCard from '@/components/PostCard';
 import CreatePostForm from '@/components/CreatePostForm';
 import EventManagementMenu from '@/components/EventManagementMenu';
 import { ProfileHeaderSkeleton, PostSkeleton, EventSkeleton, FormSkeleton } from '@/components/SkeletonLoader';
+import ConnectionMessageModal from '@/components/ConnectionMessageModal';
 import Link from 'next/link';
 import Image from 'next/image';
+import { Buddy } from '@/types';
 
 type Tab = 'posts' | 'events' | 'edit';
 
@@ -37,6 +39,9 @@ function ProfilePageContent() {
   const [error, setError] = useState<string | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
   const [isDiscoverable, setIsDiscoverable] = useState<boolean>(false);
+  const [buddyStatus, setBuddyStatus] = useState<'none' | 'pending' | 'accepted' | 'rejected' | 'loading'>('loading');
+  const [showConnectionModal, setShowConnectionModal] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [formData, setFormData] = useState({
     full_name: '',
     age: '',
@@ -63,6 +68,8 @@ function ProfilePageContent() {
         api.getUser(userId)
           .then((userData) => {
             setViewingUser(userData);
+            // Check buddy status
+            checkBuddyStatus(userId);
           })
           .catch((err) => {
             console.error('Failed to load user profile:', err);
@@ -71,12 +78,60 @@ function ProfilePageContent() {
       } else {
         setViewingUserId(null);
         setViewingUser(null);
+        setBuddyStatus('none');
       }
     } else {
       setViewingUserId(null);
       setViewingUser(null);
+      setBuddyStatus('none');
     }
   }, [searchParams, currentUser?.id]);
+
+  const checkBuddyStatus = async (otherUserId: number) => {
+    if (!currentUser?.id) {
+      setBuddyStatus('none');
+      return;
+    }
+
+    try {
+      setBuddyStatus('loading');
+      const buddies = await api.getBuddies();
+      const buddy = buddies.find((b: Buddy) => 
+        (b.user1_id === currentUser.id && b.user2_id === otherUserId) ||
+        (b.user1_id === otherUserId && b.user2_id === currentUser.id)
+      );
+      
+      if (buddy) {
+        setBuddyStatus(buddy.status as 'pending' | 'accepted' | 'rejected');
+      } else {
+        setBuddyStatus('none');
+      }
+    } catch (error) {
+      console.error('Failed to check buddy status:', error);
+      setBuddyStatus('none');
+    }
+  };
+
+  const handleConnect = () => {
+    if (!viewingUser) return;
+    setShowConnectionModal(true);
+  };
+
+  const handleSendConnection = async (message: string) => {
+    if (!viewingUser) return;
+    
+    setConnecting(true);
+    try {
+      await api.createBuddy(viewingUser.id, message);
+      await checkBuddyStatus(viewingUser.id);
+      setShowConnectionModal(false);
+    } catch (error: any) {
+      console.error('Failed to connect:', error);
+      alert(error.message || 'Failed to send connection request');
+    } finally {
+      setConnecting(false);
+    }
+  };
 
   const loadData = async () => {
     // Reload all data
@@ -102,32 +157,6 @@ function ProfilePageContent() {
       }
     }
   };
-
-  // Check for userId query param to view another user's profile
-  useEffect(() => {
-    const userIdParam = searchParams?.get('userId');
-    if (userIdParam) {
-      const userId = parseInt(userIdParam);
-      if (!isNaN(userId) && userId !== currentUser?.id) {
-        setViewingUserId(userId);
-        // Load the other user's profile
-        api.getUser(userId)
-          .then((userData) => {
-            setViewingUser(userData);
-          })
-          .catch((err) => {
-            console.error('Failed to load user profile:', err);
-            setError('Failed to load user profile');
-          });
-      } else {
-        setViewingUserId(null);
-        setViewingUser(null);
-      }
-    } else {
-      setViewingUserId(null);
-      setViewingUser(null);
-    }
-  }, [searchParams, currentUser?.id]);
 
   useEffect(() => {
     let isMounted = true;
@@ -462,16 +491,46 @@ function ProfilePageContent() {
               </div>
             </div>
             <div className="flex-1 pb-4">
-              <h1 className="text-3xl font-bold text-gray-900 mb-1">{user?.full_name || 'Guest User'}</h1>
-              {user?.location && (
-                <p className="text-gray-600 mb-2">{user.location}</p>
-              )}
-              {user?.bio && (
-                <p className="text-gray-600">{user.bio}</p>
-              )}
-              {!user && (
-                <p className="text-gray-500 text-sm">Sign in to view your profile</p>
-              )}
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <h1 className="text-3xl font-bold text-gray-900 mb-1">{user?.full_name || 'Guest User'}</h1>
+                  {user?.location && (
+                    <p className="text-gray-600 mb-2">{user.location}</p>
+                  )}
+                  {user?.bio && (
+                    <p className="text-gray-600">{user.bio}</p>
+                  )}
+                  {!user && (
+                    <p className="text-gray-500 text-sm">Sign in to view your profile</p>
+                  )}
+                </div>
+                {/* Connect Button - Show when viewing another user */}
+                {isViewingOtherUser && currentUser && (
+                  <div className="ml-4">
+                    {buddyStatus === 'loading' ? (
+                      <div className="px-6 py-2 bg-gray-100 rounded-xl text-gray-600">Loading...</div>
+                    ) : buddyStatus === 'none' ? (
+                      <button
+                        onClick={handleConnect}
+                        className="px-6 py-2 bg-[#0ef9b4] text-black rounded-xl font-semibold hover:bg-[#0dd9a0] transition-colors shadow-md hover:shadow-lg"
+                      >
+                        Connect
+                      </button>
+                    ) : buddyStatus === 'pending' ? (
+                      <div className="px-6 py-2 bg-gray-200 text-gray-700 rounded-xl font-semibold">
+                        Request Sent
+                      </div>
+                    ) : buddyStatus === 'accepted' ? (
+                      <Link
+                        href={`/messages?user=${viewingUser.id}`}
+                        className="inline-block px-6 py-2 bg-[#0ef9b4] text-black rounded-xl font-semibold hover:bg-[#0dd9a0] transition-colors shadow-md hover:shadow-lg"
+                      >
+                        Message
+                      </Link>
+                    ) : null}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

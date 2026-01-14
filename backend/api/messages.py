@@ -1,12 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
-from sqlalchemy.orm import Session
-from typing import List
-from core.database import get_db
+from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Query
+from supabase import Client
+from typing import List, Optional
+from datetime import datetime
+from core.database import get_supabase
 from api.auth import get_current_user
 from schemas.message import MessageCreate, MessageResponse, MessageDetail
-from models.user import User
-from models.message import Message
-from models.event import Event
 from core.security import verify_token
 import json
 
@@ -29,17 +27,19 @@ class ConnectionManager:
         if user_id in self.active_connections:
             await self.active_connections[user_id].send_json(message)
     
-    async def broadcast_to_event(self, message: dict, event_id: int, db: Session):
-        # Get all participants of the event
-        from models.event import event_rsvps
-        participant_ids = db.query(event_rsvps.c.user_id).filter(
-            event_rsvps.c.event_id == event_id
-        ).all()
-        participant_ids = [p[0] for p in participant_ids]
-        
-        for user_id in participant_ids:
-            if user_id in self.active_connections:
-                await self.active_connections[user_id].send_json(message)
+    async def broadcast_to_event(self, message: dict, event_id: int, supabase: Client):
+        """Broadcast message to all event participants using Supabase"""
+        try:
+            # Get all participants of the event (approved RSVPs)
+            rsvps_result = supabase.table("event_rsvps").select("user_id").eq("event_id", event_id).eq("status", "approved").execute()
+            if rsvps_result.data:
+                participant_ids = [rsvp.get("user_id") for rsvp in rsvps_result.data]
+                for user_id in participant_ids:
+                    if user_id in self.active_connections:
+                        await self.active_connections[user_id].send_json(message)
+        except Exception:
+            # If query fails, just continue (participants won't get message)
+            pass
 
 manager = ConnectionManager()
 
@@ -47,137 +47,224 @@ manager = ConnectionManager()
 @router.websocket("/ws/{token}")
 async def websocket_endpoint(websocket: WebSocket, token: str):
     """WebSocket endpoint for real-time messaging"""
-    # Verify token
-    payload = verify_token(token)
-    if not payload:
-        await websocket.close(code=1008, reason="Invalid token")
-        return
-    
-    email = payload.get("sub")
-    db = next(get_db())
-    user = db.query(User).filter(User.email == email).first()
-    if not user:
-        await websocket.close(code=1008, reason="User not found")
-        return
-    
-    await manager.connect(websocket, user.id)
-    
     try:
-        while True:
-            data = await websocket.receive_json()
-            message_type = data.get("type")
-            
-            if message_type == "message":
-                # Create message
-                content = data.get("content")
-                receiver_id = data.get("receiver_id")
-                event_id = data.get("event_id")
-                
-                if not content:
-                    continue
-                
-                # Validate receiver or event
-                if receiver_id:
-                    receiver = db.query(User).filter(User.id == receiver_id).first()
-                    if not receiver:
-                        continue
-                elif event_id:
-                    event = db.query(Event).filter(Event.id == event_id).first()
-                    if not event:
-                        continue
-                else:
-                    continue
-                
-                # Create message in database
-                new_message = Message(
-                    sender_id=user.id,
-                    receiver_id=receiver_id,
-                    event_id=event_id,
-                    content=content
-                )
-                db.add(new_message)
-                db.commit()
-                db.refresh(new_message)
-                
-                # Prepare message response
-                message_data = {
-                    "id": new_message.id,
-                    "sender_id": new_message.sender_id,
-                    "receiver_id": new_message.receiver_id,
-                    "event_id": new_message.event_id,
-                    "content": new_message.content,
-                    "is_read": new_message.is_read,
-                    "created_at": new_message.created_at.isoformat(),
-                    "sender": {
-                        "id": user.id,
-                        "full_name": user.full_name,
-                        "avatar_url": user.avatar_url
-                    }
-                }
-                
-                # Send to receiver or broadcast to event
-                if receiver_id:
-                    await manager.send_personal_message(message_data, receiver_id)
-                elif event_id:
-                    await manager.broadcast_to_event(message_data, event_id, db)
-                
-                # Echo back to sender
-                await manager.send_personal_message(message_data, user.id)
-            
-            elif message_type == "read":
-                # Mark message as read
-                message_id = data.get("message_id")
-                if message_id:
-                    message = db.query(Message).filter(Message.id == message_id).first()
-                    if message and message.receiver_id == user.id:
-                        message.is_read = True
-                        db.commit()
+        supabase: Client = get_supabase()
+    except Exception:
+        await websocket.close(code=1008, reason="Supabase connection error")
+        return
     
-    except WebSocketDisconnect:
-        manager.disconnect(user.id)
-    finally:
-        db.close()
+    # Verify token with Supabase
+    try:
+        user_response = supabase.auth.get_user(token)
+        if not user_response or not user_response.user:
+            await websocket.close(code=1008, reason="Invalid token")
+            return
+        
+        supabase_user = user_response.user
+        email = supabase_user.email
+        
+        # Get user data from Supabase database
+        user_result = supabase.table("users").select("id, email").eq("email", email).single().execute()
+        if not user_result.data:
+            await websocket.close(code=1008, reason="User not found")
+            return
+        
+        user_id = user_result.data.get("id")
+        await manager.connect(websocket, user_id)
+        
+        try:
+            while True:
+                data = await websocket.receive_json()
+                message_type = data.get("type")
+                
+                if message_type == "message":
+                    # Create message
+                    content = data.get("content")
+                    receiver_id = data.get("receiver_id")
+                    event_id = data.get("event_id")
+                    group_id = data.get("group_id")
+                    
+                    if not content:
+                        continue
+                    
+                    # Validate receiver, event, or group
+                    if receiver_id:
+                        try:
+                            receiver_result = supabase.table("users").select("id").eq("id", receiver_id).single().execute()
+                            if not receiver_result.data:
+                                continue
+                        except Exception:
+                            continue
+                    elif event_id:
+                        try:
+                            event_result = supabase.table("events").select("id").eq("id", event_id).single().execute()
+                            if not event_result.data:
+                                continue
+                        except Exception:
+                            continue
+                    elif group_id:
+                        try:
+                            # Check if user is a member
+                            member_result = supabase.table("group_members").select("user_id").eq("group_id", group_id).eq("user_id", user_id).execute()
+                            if not member_result.data or len(member_result.data) == 0:
+                                continue
+                        except Exception:
+                            continue
+                    else:
+                        continue
+                    
+                    # Create message in database
+                    try:
+                        message_result = supabase.table("messages").insert({
+                            "sender_id": user_id,
+                            "receiver_id": receiver_id,
+                            "event_id": event_id,
+                            "group_id": group_id,
+                            "content": content,
+                            "is_read": False
+                        }).execute()
+                        
+                        if not message_result.data or len(message_result.data) == 0:
+                            continue
+                        
+                        new_message = message_result.data[0]
+                        
+                        # Get sender info
+                        sender_result = supabase.table("users").select("id, full_name, avatar_url").eq("id", user_id).single().execute()
+                        sender_data = sender_result.data if sender_result.data else {}
+                        
+                        # Prepare message response
+                        message_data = {
+                            "id": new_message.get("id"),
+                            "sender_id": new_message.get("sender_id"),
+                            "receiver_id": new_message.get("receiver_id"),
+                            "event_id": new_message.get("event_id"),
+                            "group_id": new_message.get("group_id"),
+                            "content": new_message.get("content"),
+                            "is_read": new_message.get("is_read", False),
+                            "created_at": new_message.get("created_at"),
+                            "sender": {
+                                "id": sender_data.get("id"),
+                                "full_name": sender_data.get("full_name"),
+                                "avatar_url": sender_data.get("avatar_url")
+                            }
+                        }
+                        
+                        # Send to receiver or broadcast to event/group
+                        if receiver_id:
+                            await manager.send_personal_message(message_data, receiver_id)
+                        elif event_id:
+                            await manager.broadcast_to_event(message_data, event_id, supabase)
+                        elif group_id:
+                            # Get all group members and send to them
+                            try:
+                                members_result = supabase.table("group_members").select("user_id").eq("group_id", group_id).execute()
+                                if members_result.data:
+                                    for member in members_result.data:
+                                        member_id = member.get("user_id")
+                                        if member_id != user_id and member_id in manager.active_connections:
+                                            await manager.send_personal_message(message_data, member_id)
+                            except Exception:
+                                pass
+                        
+                        # Echo back to sender
+                        await manager.send_personal_message(message_data, user_id)
+                    except Exception:
+                        # If message creation fails, continue
+                        continue
+                
+                elif message_type == "read":
+                    # Mark message as read
+                    message_id = data.get("message_id")
+                    if message_id:
+                        try:
+                            # Get message and verify receiver
+                            msg_result = supabase.table("messages").select("receiver_id").eq("id", message_id).single().execute()
+                            if msg_result.data and msg_result.data.get("receiver_id") == user_id:
+                                supabase.table("messages").update({"is_read": True}).eq("id", message_id).execute()
+                        except Exception:
+                            pass
+        
+        except WebSocketDisconnect:
+            manager.disconnect(user_id)
+    except Exception as e:
+        await websocket.close(code=1008, reason=f"Connection error: {str(e)}")
 
 
 @router.post("", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
 async def create_message(
     message_data: MessageCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: dict = Depends(get_current_user)
 ):
     """Create a message (1:1, event, or group chat)"""
-    from models.group_chat import GroupChat, group_members
+    try:
+        supabase: Client = get_supabase()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Supabase connection error: {str(e)}"
+        )
     
+    user_id = current_user.get("id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User ID not found"
+        )
+    
+    # Validate receiver, event, or group
     if message_data.receiver_id:
-        receiver = db.query(User).filter(User.id == message_data.receiver_id).first()
-        if not receiver:
+        try:
+            receiver_result = supabase.table("users").select("id").eq("id", message_data.receiver_id).single().execute()
+            if not receiver_result.data:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Receiver not found"
+                )
+        except Exception as e:
+            if isinstance(e, HTTPException):
+                raise
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Receiver not found"
             )
     elif message_data.event_id:
-        event = db.query(Event).filter(Event.id == message_data.event_id).first()
-        if not event:
+        try:
+            event_result = supabase.table("events").select("id").eq("id", message_data.event_id).single().execute()
+            if not event_result.data:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Event not found"
+                )
+        except Exception as e:
+            if isinstance(e, HTTPException):
+                raise
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Event not found"
             )
     elif message_data.group_id:
-        group = db.query(GroupChat).filter(GroupChat.id == message_data.group_id).first()
-        if not group:
+        try:
+            group_result = supabase.table("group_chats").select("id").eq("id", message_data.group_id).single().execute()
+            if not group_result.data:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Group not found"
+                )
+            
+            # Check if user is a member
+            member_result = supabase.table("group_members").select("user_id").eq("group_id", message_data.group_id).eq("user_id", user_id).execute()
+            if not member_result.data or len(member_result.data) == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not a member of this group"
+                )
+        except Exception as e:
+            if isinstance(e, HTTPException):
+                raise
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Group not found"
-            )
-        # Check if user is a member
-        member = db.query(group_members).filter(
-            group_members.c.group_id == message_data.group_id,
-            group_members.c.user_id == current_user.id
-        ).first()
-        if not member:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not a member of this group"
             )
     else:
         raise HTTPException(
@@ -185,129 +272,199 @@ async def create_message(
             detail="Either receiver_id, event_id, or group_id must be provided"
         )
     
-    new_message = Message(
-        sender_id=current_user.id,
-        receiver_id=message_data.receiver_id,
-        event_id=message_data.event_id,
-        group_id=message_data.group_id,
-        content=message_data.content
-    )
-    db.add(new_message)
-    db.commit()
-    db.refresh(new_message)
-    
-    return MessageResponse.model_validate(new_message)
+    # Create message
+    try:
+        message_result = supabase.table("messages").insert({
+            "sender_id": user_id,
+            "receiver_id": message_data.receiver_id,
+            "event_id": message_data.event_id,
+            "group_id": message_data.group_id,
+            "content": message_data.content,
+            "is_read": False
+        }).execute()
+        
+        if not message_result.data or len(message_result.data) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create message"
+            )
+        
+        new_message = message_result.data[0]
+        return MessageResponse(
+            id=new_message["id"],
+            sender_id=new_message["sender_id"],
+            receiver_id=new_message.get("receiver_id"),
+            event_id=new_message.get("event_id"),
+            group_id=new_message.get("group_id"),
+            content=new_message["content"],
+            is_read=new_message.get("is_read", False),
+            created_at=datetime.fromisoformat(new_message["created_at"].replace("Z", "+00:00")) if isinstance(new_message.get("created_at"), str) else new_message.get("created_at")
+        )
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create message: {str(e)}"
+        )
 
 
 @router.get("/conversations", response_model=List[dict])
 async def list_conversations(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: dict = Depends(get_current_user)
 ):
     """List all conversations for current user"""
-    # Get 1:1 conversations
-    sent_messages = db.query(Message.receiver_id).filter(
-        Message.sender_id == current_user.id,
-        Message.receiver_id.isnot(None)
-    ).distinct().all()
+    try:
+        supabase: Client = get_supabase()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Supabase connection error: {str(e)}"
+        )
     
-    received_messages = db.query(Message.sender_id).filter(
-        Message.receiver_id == current_user.id
-    ).distinct().all()
-    
-    user_ids = set([m[0] for m in sent_messages] + [m[0] for m in received_messages])
-    
-    # Get event conversations
-    event_messages = db.query(Message.event_id).filter(
-        Message.sender_id == current_user.id,
-        Message.event_id.isnot(None)
-    ).distinct().all()
-    event_ids = [m[0] for m in event_messages]
-    
-    # Get group conversations
-    from models.group_chat import GroupChat, group_members
-    group_member_rows = db.query(group_members.c.group_id).filter(
-        group_members.c.user_id == current_user.id
-    ).all()
-    group_ids = [g[0] for g in group_member_rows]
+    user_id = current_user.get("id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User ID not found"
+        )
     
     conversations = []
     
-    # Add 1:1 conversations
-    for user_id in user_ids:
-        user = db.query(User).filter(User.id == user_id).first()
-        if user:
-            last_message = db.query(Message).filter(
-                ((Message.sender_id == current_user.id) & (Message.receiver_id == user_id)) |
-                ((Message.sender_id == user_id) & (Message.receiver_id == current_user.id))
-            ).order_by(Message.created_at.desc()).first()
-            
-            unread_count = db.query(Message).filter(
-                Message.sender_id == user_id,
-                Message.receiver_id == current_user.id,
-                Message.is_read == False
-            ).count()
-            
-            conversations.append({
-                "type": "user",
-                "id": user_id,
-                "name": user.full_name,
-                "avatar_url": user.avatar_url,
-                "last_message": {
-                    "content": last_message.content if last_message else None,
-                    "created_at": last_message.created_at.isoformat() if last_message else None
-                },
-                "unread_count": unread_count
-            })
+    # Get 1:1 conversations
+    try:
+        # Get distinct user IDs from sent messages
+        sent_result = supabase.table("messages").select("receiver_id").eq("sender_id", user_id).not_.is_("receiver_id", "null").execute()
+        sent_user_ids = set([m.get("receiver_id") for m in (sent_result.data or []) if m.get("receiver_id")])
+        
+        # Get distinct user IDs from received messages
+        received_result = supabase.table("messages").select("sender_id").eq("receiver_id", user_id).execute()
+        received_user_ids = set([m.get("sender_id") for m in (received_result.data or []) if m.get("sender_id")])
+        
+        user_ids = sent_user_ids.union(received_user_ids)
+        
+        # Get conversation data for each user
+        for other_user_id in user_ids:
+            try:
+                # Get user info
+                user_result = supabase.table("users").select("id, full_name, avatar_url").eq("id", other_user_id).single().execute()
+                if not user_result.data:
+                    continue
+                user_data = user_result.data
+                
+                # Get last message (either direction) - query both directions and get the latest
+                try:
+                    # Get messages where user is sender and other_user is receiver
+                    sent_msg_result = supabase.table("messages").select("*").eq("sender_id", user_id).eq("receiver_id", other_user_id).is_("event_id", "null").is_("group_id", "null").order("created_at", desc=True).limit(1).execute()
+                    sent_messages = sent_msg_result.data if sent_msg_result.data else []
+                    
+                    # Get messages where other_user is sender and user is receiver
+                    received_msg_result = supabase.table("messages").select("*").eq("sender_id", other_user_id).eq("receiver_id", user_id).is_("event_id", "null").is_("group_id", "null").order("created_at", desc=True).limit(1).execute()
+                    received_messages = received_msg_result.data if received_msg_result.data else []
+                    
+                    # Get the latest message
+                    all_messages = (sent_messages + received_messages)
+                    if all_messages:
+                        last_message = max(all_messages, key=lambda x: x.get("created_at", ""))
+                    else:
+                        last_message = None
+                except Exception:
+                    last_message = None
+                
+                # Get unread count
+                unread_result = supabase.table("messages").select("id", count="exact").eq("sender_id", other_user_id).eq("receiver_id", user_id).eq("is_read", False).execute()
+                unread_count = unread_result.count if unread_result.count is not None else 0
+                
+                conversations.append({
+                    "type": "user",
+                    "id": other_user_id,
+                    "name": user_data.get("full_name") or "Unknown",
+                    "avatar_url": user_data.get("avatar_url"),
+                    "last_message": {
+                        "content": last_message.get("content") if last_message else None,
+                        "created_at": last_message.get("created_at") if last_message else None
+                    },
+                    "unread_count": unread_count
+                })
+            except Exception:
+                continue
+    except Exception:
+        pass
     
-    # Add event conversations
-    for event_id in event_ids:
-        event = db.query(Event).filter(Event.id == event_id).first()
-        if event:
-            last_message = db.query(Message).filter(
-                Message.event_id == event_id
-            ).order_by(Message.created_at.desc()).first()
-            
-            conversations.append({
-                "type": "event",
-                "id": event_id,
-                "name": event.title,
-                "avatar_url": event.image_url,
-                "last_message": {
-                    "content": last_message.content if last_message else None,
-                    "created_at": last_message.created_at.isoformat() if last_message else None
-                },
-                "unread_count": 0  # Event messages don't have read receipts in MVP
-            })
+    # Get event conversations
+    try:
+        event_result = supabase.table("messages").select("event_id").eq("sender_id", user_id).not_.is_("event_id", "null").execute()
+        event_ids = list(set([m.get("event_id") for m in (event_result.data or []) if m.get("event_id")]))
+        
+        for event_id in event_ids:
+            try:
+                # Get event info
+                event_data_result = supabase.table("events").select("id, title, image_url").eq("id", event_id).single().execute()
+                if not event_data_result.data:
+                    continue
+                event_data = event_data_result.data
+                
+                # Get last message
+                last_msg_result = supabase.table("messages").select("*").eq("event_id", event_id).order("created_at", desc=True).limit(1).execute()
+                last_message = last_msg_result.data[0] if last_msg_result.data and len(last_msg_result.data) > 0 else None
+                
+                conversations.append({
+                    "type": "event",
+                    "id": event_id,
+                    "name": event_data.get("title") or "Unknown Event",
+                    "avatar_url": event_data.get("image_url"),
+                    "last_message": {
+                        "content": last_message.get("content") if last_message else None,
+                        "created_at": last_message.get("created_at") if last_message else None
+                    },
+                    "unread_count": 0
+                })
+            except Exception:
+                continue
+    except Exception:
+        pass
     
-    # Add group conversations
-    for group_id in group_ids:
-        group = db.query(GroupChat).filter(GroupChat.id == group_id).first()
-        if group:
-            last_message = db.query(Message).filter(
-                Message.group_id == group_id
-            ).order_by(Message.created_at.desc()).first()
-            
-            # Get member count
-            member_count = db.query(group_members).filter(
-                group_members.c.group_id == group_id
-            ).count()
-            
-            conversations.append({
-                "type": "group",
-                "id": group_id,
-                "name": group.name,
-                "avatar_url": group.avatar_url,
-                "member_count": member_count,
-                "last_message": {
-                    "content": last_message.content if last_message else None,
-                    "created_at": last_message.created_at.isoformat() if last_message else None
-                },
-                "unread_count": 0  # Group messages don't have read receipts in MVP
-            })
+    # Get group conversations
+    try:
+        # Get groups user is a member of
+        group_members_result = supabase.table("group_members").select("group_id").eq("user_id", user_id).execute()
+        group_ids = list(set([g.get("group_id") for g in (group_members_result.data or []) if g.get("group_id")]))
+        
+        for group_id in group_ids:
+            try:
+                # Get group info
+                group_result = supabase.table("group_chats").select("id, name, avatar_url").eq("id", group_id).single().execute()
+                if not group_result.data:
+                    continue
+                group_data = group_result.data
+                
+                # Get last message
+                last_msg_result = supabase.table("messages").select("*").eq("group_id", group_id).order("created_at", desc=True).limit(1).execute()
+                last_message = last_msg_result.data[0] if last_msg_result.data and len(last_msg_result.data) > 0 else None
+                
+                # Get member count
+                member_count_result = supabase.table("group_members").select("id", count="exact").eq("group_id", group_id).execute()
+                member_count = member_count_result.count if member_count_result.count is not None else 0
+                
+                conversations.append({
+                    "type": "group",
+                    "id": group_id,
+                    "name": group_data.get("name") or "Unknown Group",
+                    "avatar_url": group_data.get("avatar_url"),
+                    "member_count": member_count,
+                    "last_message": {
+                        "content": last_message.get("content") if last_message else None,
+                        "created_at": last_message.get("created_at") if last_message else None
+                    },
+                    "unread_count": 0
+                })
+            except Exception:
+                continue
+    except Exception:
+        pass
     
     # Sort by last message time
-    conversations.sort(key=lambda x: x["last_message"]["created_at"] or "", reverse=True)
+    conversations.sort(key=lambda x: x.get("last_message", {}).get("created_at") or "", reverse=True)
     
     return conversations
 
@@ -315,57 +472,127 @@ async def list_conversations(
 @router.get("/conversations/{conversation_id}", response_model=List[MessageDetail])
 async def get_conversation(
     conversation_id: int,
-    conversation_type: str = "user",  # "user", "event", or "group"
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    conversation_type: str = Query("user", description="Type: user, event, or group"),
+    current_user: dict = Depends(get_current_user)
 ):
     """Get messages in a conversation"""
+    try:
+        supabase: Client = get_supabase()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Supabase connection error: {str(e)}"
+        )
+    
+    user_id = current_user.get("id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User ID not found"
+        )
+    
+    messages_data = []
+    
     if conversation_type == "user":
-        messages = db.query(Message).filter(
-            ((Message.sender_id == current_user.id) & (Message.receiver_id == conversation_id)) |
-            ((Message.sender_id == conversation_id) & (Message.receiver_id == current_user.id)),
-            Message.event_id.is_(None),
-            Message.group_id.is_(None)
-        ).order_by(Message.created_at).all()
+        # Get messages between current user and conversation user
+        try:
+            # Get messages where current user is sender and conversation user is receiver
+            sent_result = supabase.table("messages").select("*").eq("sender_id", user_id).eq("receiver_id", conversation_id).is_("event_id", "null").is_("group_id", "null").order("created_at", desc=False).execute()
+            if sent_result.data:
+                messages_data.extend(sent_result.data)
+            
+            # Get messages where conversation user is sender and current user is receiver
+            received_result = supabase.table("messages").select("*").eq("sender_id", conversation_id).eq("receiver_id", user_id).is_("event_id", "null").is_("group_id", "null").order("created_at", desc=False).execute()
+            if received_result.data:
+                messages_data.extend(received_result.data)
+        except Exception:
+            messages_data = []
     elif conversation_type == "event":
-        messages = db.query(Message).filter(
-            Message.event_id == conversation_id
-        ).order_by(Message.created_at).all()
+        # Get messages for event
+        try:
+            messages_result = supabase.table("messages").select("*").eq("event_id", conversation_id).order("created_at", desc=False).execute()
+            messages_data = messages_result.data if messages_result.data else []
+        except Exception:
+            messages_data = []
     else:  # group
-        from models.group_chat import group_members
         # Check if user is a member
-        member = db.query(group_members).filter(
-            group_members.c.group_id == conversation_id,
-            group_members.c.user_id == current_user.id
-        ).first()
-        if not member:
+        try:
+            member_result = supabase.table("group_members").select("user_id").eq("group_id", conversation_id).eq("user_id", user_id).execute()
+            if not member_result.data or len(member_result.data) == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not a member of this group"
+                )
+            
+            # Get messages for group
+            messages_result = supabase.table("messages").select("*").eq("group_id", conversation_id).order("created_at", desc=False).execute()
+            messages_data = messages_result.data if messages_result.data else []
+        except Exception as e:
+            if isinstance(e, HTTPException):
+                raise
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not a member of this group"
             )
-        messages = db.query(Message).filter(
-            Message.group_id == conversation_id
-        ).order_by(Message.created_at).all()
     
+    # Sort messages by created_at
+    messages_data.sort(key=lambda x: x.get("created_at", ""))
+    
+    # Build result with user/event details
     result = []
-    for message in messages:
+    for msg in messages_data:
+        # Get sender info
+        sender_data = {}
+        try:
+            sender_result = supabase.table("users").select("id, full_name, avatar_url").eq("id", msg.get("sender_id")).single().execute()
+            if sender_result.data:
+                sender_data = {
+                    "id": sender_result.data.get("id"),
+                    "full_name": sender_result.data.get("full_name") or "Unknown",
+                    "avatar_url": sender_result.data.get("avatar_url")
+                }
+        except Exception:
+            sender_data = {"id": msg.get("sender_id"), "full_name": "Unknown", "avatar_url": None}
+        
+        # Get receiver info (if exists)
+        receiver_data = None
+        if msg.get("receiver_id"):
+            try:
+                receiver_result = supabase.table("users").select("id, full_name, avatar_url").eq("id", msg.get("receiver_id")).single().execute()
+                if receiver_result.data:
+                    receiver_data = {
+                        "id": receiver_result.data.get("id"),
+                        "full_name": receiver_result.data.get("full_name") or "Unknown",
+                        "avatar_url": receiver_result.data.get("avatar_url")
+                    }
+            except Exception:
+                receiver_data = {"id": msg.get("receiver_id"), "full_name": "Unknown", "avatar_url": None}
+        
+        # Get event info (if exists)
+        event_data = None
+        if msg.get("event_id"):
+            try:
+                event_result = supabase.table("events").select("id, title").eq("id", msg.get("event_id")).single().execute()
+                if event_result.data:
+                    event_data = {
+                        "id": event_result.data.get("id"),
+                        "title": event_result.data.get("title") or "Unknown Event"
+                    }
+            except Exception:
+                event_data = {"id": msg.get("event_id"), "title": "Unknown Event"}
+        
         result.append(MessageDetail(
-            **{col.name: getattr(message, col.name) for col in message.__table__.columns},
-            sender={
-                "id": message.sender.id,
-                "full_name": message.sender.full_name,
-                "avatar_url": message.sender.avatar_url
-            },
-            receiver={
-                "id": message.receiver.id,
-                "full_name": message.receiver.full_name,
-                "avatar_url": message.receiver.avatar_url
-            } if message.receiver else None,
-            event={
-                "id": message.event.id,
-                "title": message.event.title
-            } if message.event else None
+            id=msg.get("id"),
+            sender_id=msg.get("sender_id"),
+            receiver_id=msg.get("receiver_id"),
+            event_id=msg.get("event_id"),
+            group_id=msg.get("group_id"),
+            content=msg.get("content"),
+            is_read=msg.get("is_read", False),
+            created_at=datetime.fromisoformat(msg["created_at"].replace("Z", "+00:00")) if isinstance(msg.get("created_at"), str) else msg.get("created_at"),
+            sender=sender_data,
+            receiver=receiver_data,
+            event=event_data
         ))
     
     return result
-

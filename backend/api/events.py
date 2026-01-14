@@ -692,3 +692,250 @@ async def get_my_events(
         "attending": attending_events,
         "attended": attended_events
     }
+
+
+@router.get("/{event_id}/rsvps", response_model=dict)
+async def get_event_rsvps(
+    event_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all RSVPs for an event (host only)"""
+    try:
+        supabase: Client = get_supabase()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Supabase connection error: {str(e)}"
+        )
+    
+    user_id = current_user.get("id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User ID not found"
+        )
+    
+    # Get event and verify user is host
+    try:
+        event_result = supabase.table("events").select("*").eq("id", event_id).single().execute()
+        if not event_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Event not found"
+            )
+        event = event_result.data
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Event not found"
+        )
+    
+    # Check if user is host
+    if event.get("host_id") != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the event host can view RSVPs"
+        )
+    
+    # Get all RSVPs
+    approved_users = []
+    pending_users = []
+    rejected_users = []
+    
+    try:
+        rsvps_result = supabase.table("event_rsvps").select("user_id, status").eq("event_id", event_id).execute()
+        if rsvps_result.data:
+            approved_ids = [r["user_id"] for r in rsvps_result.data if r.get("status") == "approved"]
+            pending_ids = [r["user_id"] for r in rsvps_result.data if r.get("status") == "pending"]
+            rejected_ids = [r["user_id"] for r in rsvps_result.data if r.get("status") == "rejected"]
+            
+            # Get user info for each status
+            if approved_ids:
+                approved_result = supabase.table("users").select("id, full_name, avatar_url, location").in_("id", approved_ids).execute()
+                if approved_result.data:
+                    approved_users = approved_result.data
+            
+            if pending_ids:
+                pending_result = supabase.table("users").select("id, full_name, avatar_url, location").in_("id", pending_ids).execute()
+                if pending_result.data:
+                    pending_users = pending_result.data
+            
+            if rejected_ids:
+                rejected_result = supabase.table("users").select("id, full_name, avatar_url, location").in_("id", rejected_ids).execute()
+                if rejected_result.data:
+                    rejected_users = rejected_result.data
+    except Exception as e:
+        # If query fails, return empty lists
+        pass
+    
+    return {
+        "approved": approved_users,
+        "pending": pending_users,
+        "rejected": rejected_users
+    }
+
+
+@router.post("/{event_id}/rsvps/{user_id}/approve", status_code=status.HTTP_204_NO_CONTENT)
+async def approve_rsvp(
+    event_id: int,
+    user_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Approve a pending RSVP (host only)"""
+    try:
+        supabase: Client = get_supabase()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Supabase connection error: {str(e)}"
+        )
+    
+    current_user_id = current_user.get("id")
+    if not current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User ID not found"
+        )
+    
+    # Get event and verify user is host
+    try:
+        event_result = supabase.table("events").select("*").eq("id", event_id).single().execute()
+        if not event_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Event not found"
+            )
+        event = event_result.data
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Event not found"
+        )
+    
+    # Check if user is host
+    if event.get("host_id") != current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the event host can approve RSVPs"
+        )
+    
+    # Check if RSVP exists
+    try:
+        rsvp_result = supabase.table("event_rsvps").select("*").eq("event_id", event_id).eq("user_id", user_id).single().execute()
+        if not rsvp_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="RSVP not found"
+            )
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="RSVP not found"
+        )
+    
+    # Check max participants before approving
+    if event.get("max_participants"):
+        try:
+            current_count_result = supabase.table("event_rsvps").select("id", count="exact").eq("event_id", event_id).eq("status", "approved").execute()
+            current_count = current_count_result.count if current_count_result.count is not None else 0
+            if current_count >= event.get("max_participants"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Event is full"
+                )
+        except Exception as e:
+            if isinstance(e, HTTPException):
+                raise
+            # If query fails, continue (might be a connection issue)
+            pass
+    
+    # Update RSVP status to approved
+    try:
+        supabase.table("event_rsvps").update({"status": "approved"}).eq("event_id", event_id).eq("user_id", user_id).execute()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to approve RSVP: {str(e)}"
+        )
+    
+    return None
+
+
+@router.post("/{event_id}/rsvps/{user_id}/reject", status_code=status.HTTP_204_NO_CONTENT)
+async def reject_rsvp(
+    event_id: int,
+    user_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Reject a pending RSVP (host only)"""
+    try:
+        supabase: Client = get_supabase()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Supabase connection error: {str(e)}"
+        )
+    
+    current_user_id = current_user.get("id")
+    if not current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User ID not found"
+        )
+    
+    # Get event and verify user is host
+    try:
+        event_result = supabase.table("events").select("*").eq("id", event_id).single().execute()
+        if not event_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Event not found"
+            )
+        event = event_result.data
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Event not found"
+        )
+    
+    # Check if user is host
+    if event.get("host_id") != current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the event host can reject RSVPs"
+        )
+    
+    # Check if RSVP exists
+    try:
+        rsvp_result = supabase.table("event_rsvps").select("*").eq("event_id", event_id).eq("user_id", user_id).single().execute()
+        if not rsvp_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="RSVP not found"
+            )
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="RSVP not found"
+        )
+    
+    # Update RSVP status to rejected
+    try:
+        supabase.table("event_rsvps").update({"status": "rejected"}).eq("event_id", event_id).eq("user_id", user_id).execute()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reject RSVP: {str(e)}"
+        )
+    
+    return None
