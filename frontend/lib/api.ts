@@ -27,11 +27,18 @@ export class ApiClient {
     if (typeof window === 'undefined') return null;
     
     // Check if Supabase is properly configured
+    // Note: NEXT_PUBLIC_ variables are embedded at BUILD TIME in Next.js
+    // If you just added them to Vercel, you need to trigger a new deployment
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
     
     if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('placeholder')) {
-      throw new Error('Authentication failed: Supabase is not configured. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY in your environment variables. For Vercel, add them in Project Settings → Environment Variables.');
+      console.error('Supabase environment check failed:', {
+        hasUrl: !!supabaseUrl,
+        hasKey: !!supabaseKey,
+        urlValue: supabaseUrl?.substring(0, 20) + '...',
+      });
+      throw new Error('Authentication failed: Supabase environment variables are not available. If you just added them to Vercel, please trigger a new deployment. Environment variables prefixed with NEXT_PUBLIC_ are embedded at build time and require a redeploy.');
     }
     
     try {
