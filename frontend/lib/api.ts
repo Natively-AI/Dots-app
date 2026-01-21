@@ -25,12 +25,38 @@ export class ApiClient {
 
   async getToken(): Promise<string | null> {
     if (typeof window === 'undefined') return null;
+    
+    // Check if Supabase is properly configured
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+    
+    if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('placeholder')) {
+      throw new Error('Authentication failed: Supabase is not configured. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY in your environment variables. For Vercel, add them in Project Settings → Environment Variables.');
+    }
+    
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error('Supabase auth error:', error);
+        throw new Error(error.message || 'Authentication failed');
+      }
+      
       return session?.access_token || null;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to get token:', error);
-      return null;
+      
+      // If it's already our custom error, re-throw it
+      if (error.message && error.message.includes('Supabase is not configured')) {
+        throw error;
+      }
+      
+      // For other Supabase errors, provide helpful message
+      if (error.message && error.message.includes('Invalid API key') || error.message.includes('Invalid URL')) {
+        throw new Error('Authentication failed: Supabase configuration is invalid. Please check your environment variables.');
+      }
+      
+      throw new Error(error.message || 'Authentication failed. Please check your connection and try again.');
     }
   }
 
