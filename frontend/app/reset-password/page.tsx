@@ -129,6 +129,9 @@ function ResetPasswordPageContent() {
         throw new Error(error.message);
       }
 
+      // Sign out after password reset (Supabase keeps user signed in after updateUser)
+      await supabase.auth.signOut();
+      
       setSuccess(true);
       // Redirect to login after 2 seconds
       setTimeout(() => {

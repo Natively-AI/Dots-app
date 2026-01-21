@@ -10,7 +10,7 @@ export default function ProfileOnboardingWrapper({ children }: { children: React
   const pathname = usePathname();
 
   // Don't show onboarding on auth pages
-  const authPages = ['/login', '/register', '/auth', '/waitlist'];
+  const authPages = ['/login', '/register', '/auth', '/waitlist', '/forgot-password', '/reset-password'];
   const isAuthPage = authPages.some(page => pathname?.startsWith(page));
 
   // Show loading state while checking auth

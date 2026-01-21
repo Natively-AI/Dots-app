@@ -6,6 +6,11 @@ import { User } from '@/types';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY || '';
 
+// Check if environment variables are missing (in production)
+if (typeof window !== 'undefined' && (!supabaseUrl || !supabasePublishableKey)) {
+  console.error('⚠️ SUPABASE_URL is not configured. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY in your environment variables.');
+}
+
 // Create a dummy client during build if env vars are missing
 let supabaseClient: ReturnType<typeof createClient>;
 
@@ -23,7 +28,8 @@ if (!supabaseUrl || !supabasePublishableKey) {
     });
   } else {
     // Client-side: warn but still create client (will fail gracefully)
-    console.warn('Supabase URL or Publishable Key not configured. Please check your .env.local file.');
+    console.warn('⚠️ Supabase URL or Publishable Key not configured. Please check your environment variables.');
+    console.warn('For Vercel: Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY in Project Settings → Environment Variables');
     supabaseClient = createClient(supabaseUrl || 'https://placeholder.supabase.co', supabasePublishableKey || 'placeholder-key', {
       auth: {
         persistSession: true,
