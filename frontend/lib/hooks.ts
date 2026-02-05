@@ -2,6 +2,7 @@
 
 import useSWR from 'swr';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import type { Event, Sport, Goal, Conversation } from '@/types';
 
 /** Cache events - instant display when switching tabs. Revalidate on focus. */
@@ -57,14 +58,21 @@ export function useBuddies() {
   return { buddies: data ?? [], isLoading, error, mutate };
 }
 
-/** Conversations - cache for tab switching */
+/** Conversations - cache for tab switching. Only fetches when user is authenticated. */
 export function useConversations() {
+  const { user } = useAuth();
   const { data, error, isLoading, mutate } = useSWR<Conversation[]>(
-    'conversations',
+    user ? 'conversations' : null,
     () => api.getConversations(),
     {
       revalidateOnFocus: true,
       dedupingInterval: 5000, // Shorter - messages change often
+      onErrorRetry: (err, _key, _config, revalidate, { retryCount }) => {
+        // Don't retry on auth errors
+        if (err?.message?.includes('401') || err?.message?.includes('not authenticated')) return;
+        if (retryCount >= 3) return;
+        setTimeout(() => revalidate(), 5000);
+      },
     }
   );
   return { conversations: data ?? [], isLoading, error, mutate };

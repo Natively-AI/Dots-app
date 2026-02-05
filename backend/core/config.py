@@ -16,12 +16,14 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
-    # CORS - Allow all localhost ports for development
+    # CORS - Allow localhost for dev and production domains
     CORS_ORIGINS: List[str] = [
         "http://localhost:3000",
         "http://localhost:3001",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3001",
+        "https://dotsmove.com",
+        "https://www.dotsmove.com",
     ]
     
     # App

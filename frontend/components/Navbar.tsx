@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { api } from '@/lib/api';
 import Logo from './Logo';
 
@@ -13,6 +13,7 @@ export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
   const [unreadCount, setUnreadCount] = useState(0);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const handleLogout = () => {
     logout();
@@ -20,25 +21,38 @@ export default function Navbar() {
   };
 
   useEffect(() => {
-    const loadUnreadCount = async () => {
-      if (!user) {
-        setUnreadCount(0);
-        return;
+    if (!user) {
+      setUnreadCount(0);
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
       }
+      return;
+    }
 
+    const loadUnreadCount = async () => {
       try {
         const conversations = await api.getConversations();
         const totalUnread = conversations.reduce((sum, conv) => sum + (conv.unread_count || 0), 0);
         setUnreadCount(totalUnread);
-      } catch {
+      } catch (err) {
         setUnreadCount(0);
+        // Stop polling on auth/network errors so we don't spam 401s
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current);
+          pollingRef.current = null;
+        }
       }
     };
 
     loadUnreadCount();
-    // Refresh unread count every 30 seconds
-    const interval = setInterval(loadUnreadCount, 30000);
-    return () => clearInterval(interval);
+    pollingRef.current = setInterval(loadUnreadCount, 30000);
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    };
   }, [user]);
 
   if (!user) {

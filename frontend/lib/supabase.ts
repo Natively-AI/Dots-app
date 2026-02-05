@@ -36,6 +36,7 @@ if (!supabaseUrl || !supabasePublishableKey) {
         autoRefreshToken: true,
         detectSessionInUrl: true,
       },
+      global: { headers: { 'X-Requested-With': 'XMLHttpRequest' } },
     });
   }
 } else {
@@ -44,6 +45,10 @@ if (!supabaseUrl || !supabasePublishableKey) {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
+    },
+    global: {
+      // Required by Supabase Auth: "Must specify one of: origin, x-requested-with"
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
     },
   });
 }

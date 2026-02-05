@@ -106,6 +106,15 @@ alembic upgrade head
 alembic downgrade -1
 ```
 
+## Production (Vercel)
+
+1. **Set environment variables** in Vercel Project Settings → Environment Variables:
+   - `NEXT_PUBLIC_SUPABASE_URL` – Your Supabase project URL (e.g. `https://xxx.supabase.co`)
+   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY` – Supabase anon/public key
+   - `NEXT_PUBLIC_API_URL` – Backend API URL (e.g. Cloud Run URL)
+
+2. **Redeploy after adding vars** – `NEXT_PUBLIC_` variables are embedded at build time; changes require a new deployment.
+
 ## License
 
 MIT

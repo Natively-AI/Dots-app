@@ -1,4 +1,5 @@
 import { Event, Sport, User, Buddy, GroupChat, Conversation, Goal, Message, GroupMember, Post } from '@/types';
+import { logApiEnv, logApiRequest, logApiError } from './apiDebug';
 import {
   mockUsers,
   mockEvents,
@@ -22,10 +23,18 @@ export class ApiClient {
   private localEvents: Event[] = [...mockEvents];
   private rsvpEvents: Set<number> = new Set();
   private baseUrl: string = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  private _debugLogged = false;
+
+  private ensureDebugLogged() {
+    if (this._debugLogged || typeof window === 'undefined') return;
+    this._debugLogged = true;
+    logApiEnv();
+  }
 
   async getToken(): Promise<string | null> {
     if (typeof window === 'undefined') return null;
-    
+    this.ensureDebugLogged();
+
     // Check if Supabase is properly configured
     // Note: NEXT_PUBLIC_ variables are embedded at BUILD TIME in Next.js
     // If you just added them to Vercel, you need to trigger a new deployment
@@ -90,13 +99,17 @@ export class ApiClient {
 
   // Users - Uses Promise.race for timeout (no AbortController) to avoid "signal is aborted" errors
   async getCurrentUser(accessToken?: string | null): Promise<User> {
+    this.ensureDebugLogged();
     const token = accessToken ?? (await this.getToken());
     if (!token) {
+      logApiRequest('getCurrentUser', `${this.baseUrl}/users/me`, { hasToken: false });
       throw new Error('Not authenticated');
     }
 
+    const url = `${this.baseUrl}/users/me`;
+    logApiRequest('getCurrentUser', url, { hasToken: true });
     const timeoutMs = 8000; // 8s - fast fallback for login
-    const fetchPromise = fetch(`${this.baseUrl}/users/me`, {
+    const fetchPromise = fetch(url, {
       headers: { 'Authorization': `Bearer ${token}` },
     });
     const timeoutPromise = new Promise<never>((_, reject) =>
@@ -105,7 +118,10 @@ export class ApiClient {
 
     try {
       const response = await Promise.race([fetchPromise, timeoutPromise]);
-      if (!response.ok) throw new Error('Failed to fetch user profile');
+      if (!response.ok) {
+        await logApiError('getCurrentUser', url, response, { hasToken: !!token });
+        throw new Error('Failed to fetch user profile');
+      }
       return response.json();
     } catch (e: any) {
       if (e?.name === 'AbortError') {
@@ -340,8 +356,9 @@ export class ApiClient {
     try {
       const response = await Promise.race([fetchPromise, timeoutPromise]);
       if (!response.ok) {
-        const errorText = await response.text().catch(() => 'Failed to fetch events');
-        throw new Error(errorText || 'Failed to fetch events');
+        const parsed = await logApiError('getEvents', url, response);
+        const msg = typeof parsed === 'string' ? parsed : (parsed as { detail?: string })?.detail || 'Failed to fetch events';
+        throw new Error(msg);
       }
       return response.json();
     } catch (error: any) {
@@ -948,7 +965,8 @@ export class ApiClient {
     if (!token) throw new Error('Not authenticated');
     if (signal?.aborted) return [];
 
-    const fetchPromise = fetch(`${this.baseUrl}/messages/conversations`, {
+    const url = `${this.baseUrl}/messages/conversations`;
+    const fetchPromise = fetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -964,13 +982,19 @@ export class ApiClient {
       const response = await Promise.race([fetchPromise, timeoutPromise]);
 
       if (!response.ok) {
-        const errorText = await response.text().catch(() => '');
+        const parsed = await logApiError('getConversations', url, response, { hasToken: !!token });
+        // 401 = token missing/expired/invalid - return empty and don't throw to avoid repeated console errors from polling
+        if (response.status === 401) {
+          if (typeof window !== 'undefined') {
+            console.warn('[API] Conversations: not authenticated (401). Sign in again if needed.');
+          }
+          return [];
+        }
         let detail = 'Failed to fetch conversations';
-        try {
-          const err = JSON.parse(errorText);
-          detail = err.detail ?? detail;
-        } catch {
-          detail = errorText || detail;
+        if (typeof parsed === 'object' && parsed !== null && 'detail' in parsed) {
+          detail = (parsed as { detail: unknown }).detail as string;
+        } else if (typeof parsed === 'string') {
+          detail = parsed;
         }
         const detailStr = typeof detail === 'string' ? detail : JSON.stringify(detail);
         if (response.status >= 500 || detailStr.toLowerCase().includes('server disconnected')) {
@@ -1363,8 +1387,9 @@ export class ApiClient {
 
   // Sports & Goals - Promise.race for timeout (no AbortController)
   async getSports(): Promise<Sport[]> {
+    const url = `${this.baseUrl}/sports`;
     try {
-      const fetchPromise = fetch(`${this.baseUrl}/sports`);
+      const fetchPromise = fetch(url);
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Request timeout')), 8000)
       );
@@ -1373,6 +1398,7 @@ export class ApiClient {
         const data = await response.json();
         return data || [];
       }
+      await logApiError('getSports', url, response);
     } catch (error: any) {
       if (error.message === 'Failed to fetch' || error.message?.includes('fetch')) {
         console.warn('Backend not available for sports');
@@ -1384,8 +1410,9 @@ export class ApiClient {
   }
 
   async getGoals(): Promise<Goal[]> {
+    const url = `${this.baseUrl}/goals`;
     try {
-      const fetchPromise = fetch(`${this.baseUrl}/goals`);
+      const fetchPromise = fetch(url);
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Request timeout')), 8000)
       );
@@ -1394,6 +1421,7 @@ export class ApiClient {
         const data = await response.json();
         return data || [];
       }
+      await logApiError('getGoals', url, response);
     } catch (error: any) {
       if (error.message === 'Failed to fetch' || error.message?.includes('fetch')) {
         console.warn('Backend not available for goals');
@@ -1439,15 +1467,17 @@ export class ApiClient {
     params.append('limit', limit.toString());
     params.append('offset', offset.toString());
 
-    const fetchPromise = fetch(`${this.baseUrl}/posts?${params}`, { headers, signal: opts?.signal });
+    const url = `${this.baseUrl}/posts?${params}`;
+    const fetchPromise = fetch(url, { headers, signal: opts?.signal });
     const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('Request timeout')), 15000)
     );
     try {
       const response = await Promise.race([fetchPromise, timeoutPromise]);
       if (!response.ok) {
-        const errorText = await response.text().catch(() => 'Failed to fetch posts');
-        throw new Error(errorText || 'Failed to fetch posts');
+        const parsed = await logApiError('getPosts', url, response, { hasToken: !!token });
+        const msg = typeof parsed === 'string' ? parsed : (parsed as { detail?: string })?.detail || 'Failed to fetch posts';
+        throw new Error(msg);
       }
       return response.json();
     } catch (error: any) {
@@ -1525,7 +1555,8 @@ export class ApiClient {
     if (!token) throw new Error('Not authenticated');
     if (opts?.signal?.aborted) return { owned: [], attending: [], attended: [] };
 
-    const fetchPromise = fetch(`${this.baseUrl}/events/user/me`, {
+    const url = `${this.baseUrl}/events/user/me`;
+    const fetchPromise = fetch(url, {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
@@ -1538,8 +1569,9 @@ export class ApiClient {
     try {
       const response = await Promise.race([fetchPromise, timeoutPromise]);
       if (!response.ok) {
-        const errorText = await response.text().catch(() => 'Failed to fetch user events');
-        throw new Error(errorText || 'Failed to fetch user events');
+        const parsed = await logApiError('getMyEvents', url, response, { hasToken: !!token });
+        const msg = typeof parsed === 'string' ? parsed : (parsed as { detail?: string })?.detail || 'Failed to fetch user events';
+        throw new Error(msg);
       }
       return response.json();
     } catch (error: any) {
