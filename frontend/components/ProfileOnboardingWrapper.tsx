@@ -23,12 +23,13 @@ export default function ProfileOnboardingWrapper({ children }: { children: React
     return <>{children}</>;
   }
 
-  // Check if user has explicitly completed onboarding (via skip or complete)
-  // If profile_completed is true, don't show onboarding regardless of completion percentage
-  // Otherwise, check if profile is less than 80% complete
-  const profileCompletion = calculateProfileCompletion(user);
+  // If profile_completed is true, never show onboarding (trust DB over transient failures)
   const hasCompletedOnboarding = user.profile_completed === true;
-  const shouldShowOnboarding = !hasCompletedOnboarding && profileCompletion && !profileCompletion.isComplete;
+  if (hasCompletedOnboarding) {
+    return <>{children}</>;
+  }
+  const profileCompletion = calculateProfileCompletion(user);
+  const shouldShowOnboarding = profileCompletion && !profileCompletion.isComplete;
 
   // Show onboarding if:
   // 1. User is logged in

@@ -9,6 +9,8 @@ import Navbar from '@/components/Navbar';
 import BottomNav from '@/components/BottomNav';
 import BuddyGrid from '@/components/BuddyGrid';
 import ConnectionMessageModal from '@/components/ConnectionMessageModal';
+import ProfileAvatar from '@/components/ProfileAvatar';
+import { BuddiesSkeleton } from '@/components/SkeletonLoader';
 import { api } from '@/lib/api';
 import { Buddy } from '@/types';
 import Link from 'next/link';
@@ -27,93 +29,109 @@ function BuddiesPageContent() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [pendingConnection, setPendingConnection] = useState<{ userId: number; userName: string; sports?: Array<{ name: string; icon?: string }> } | null>(null);
+  const [discoveryDisabled, setDiscoveryDisabled] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check URL params for tab
     const tab = searchParams?.get('tab');
-    if (tab === 'pending') {
-      setActiveTab('pending');
-    } else if (tab === 'buddies') {
-      setActiveTab('buddies');
-    } else {
-      setActiveTab('discover');
+    const newTab = tab === 'pending' ? 'pending' : tab === 'buddies' ? 'buddies' : 'discover';
+    setActiveTab(newTab);
+
+    if (!user) {
+      setLoading(false);
+      setLoadError(null);
+      return;
     }
-    
-    // Always load data when user or tab changes
-    if (user) {
-      loadData(true); // Reset on initial load
-    }
+
+    loadData(true, newTab);
   }, [user, searchParams]);
 
-  const loadData = async (reset = false) => {
+  const loadData = async (reset = false, tabOverride?: 'discover' | 'pending' | 'buddies') => {
+    const effectiveTab = tabOverride ?? activeTab;
     try {
-      const promises = [api.getBuddies()];
-      
-      // Always try to load suggested if on discover tab (regardless of user's discoverability)
-      // This shows all discoverable users
-      if (activeTab === 'discover') {
-        try {
-          promises.push(api.getSuggestedBuddies(10, 0, reset ? 0 : suggested.length));
-        } catch (error) {
-          // If user is not discoverable, still try to load others who are
-          promises.push(Promise.resolve([]));
-        }
-      } else {
-        promises.push(Promise.resolve([]));
+      setLoadError(null);
+      setDiscoveryDisabled(false);
+      const promises: [Promise<any[]>, Promise<any[] | any>] = [
+        api.getBuddies(),
+        effectiveTab === 'discover' ? fetchSuggestedBuddies(reset) : Promise.resolve([]),
+      ];
+
+      // Use allSettled so one timeout doesn't fail the entire load - show whatever succeeded
+      const [buddiesResult, suggestedResult] = await Promise.allSettled(promises);
+      const buddiesData = buddiesResult.status === 'fulfilled' ? buddiesResult.value : [];
+      const suggestedData = suggestedResult.status === 'fulfilled' ? suggestedResult.value : [];
+      if (buddiesResult.status === 'rejected') {
+        console.error('Failed to load buddies:', buddiesResult.reason);
+        setLoadError(buddiesResult.reason?.message || 'Failed to load buddies. Please try again.');
       }
-      
-      const [buddiesData, suggestedData] = await Promise.all(promises);
-      setBuddies(buddiesData);
+      if (suggestedResult.status === 'rejected') {
+        const msg = (suggestedResult.reason?.message || '').toLowerCase();
+        if (msg.includes('enable discovery') || msg.includes('discovery')) {
+          setDiscoveryDisabled(true);
+        }
+      }
+
+      setBuddies(Array.isArray(buddiesData) ? buddiesData : []);
+      const suggestedList = Array.isArray(suggestedData) ? suggestedData : [];
       if (reset) {
-        setSuggested(suggestedData);
+        setSuggested(suggestedList);
         setCurrentIndex(0);
         setSwipedUsers(new Set());
-        setHasMore(suggestedData.length > 0);
+        setHasMore(suggestedList.length >= 10);
       } else {
-        setSuggested(prev => [...prev, ...suggestedData]);
-        setHasMore(suggestedData.length > 0);
+        setSuggested((prev) => [...prev, ...suggestedList]);
+        setHasMore(suggestedList.length >= 10);
       }
     } catch (error: any) {
       console.error('Failed to load buddies:', error);
-      if (error.message?.includes('discovery')) {
-        // User is not discoverable, but we can still show discoverable users
-        setSuggested([]);
-        setHasMore(false);
-      } else {
-        setHasMore(false);
-      }
+      setLoadError(error?.message || 'Failed to load buddies. Please try again.');
     } finally {
       setLoading(false);
       setLoadingMore(false);
     }
   };
 
+  const fetchSuggestedBuddies = async (reset: boolean): Promise<any[]> => {
+    try {
+      return await api.getSuggestedBuddies(10, 0, reset ? 0 : suggested.length);
+    } catch (error: any) {
+      const msg = (error?.message || '').toLowerCase();
+      if (msg.includes('enable discovery') || msg.includes('discovery')) {
+        setDiscoveryDisabled(true);
+      }
+      return [];
+    }
+  };
+
   const loadMoreBuddies = useCallback(async () => {
-    if (loadingMore || !hasMore || suggested.length === 0) return;
-    
+    if (loadingMore || !hasMore || suggested.length === 0 || discoveryDisabled) return;
+
     setLoadingMore(true);
     try {
-      const nextBatch = await api.getSuggestedBuddies(10, 20, suggested.length); // Lowered min_score to 20
+      const nextBatch = await api.getSuggestedBuddies(10, 20, suggested.length);
       if (nextBatch.length === 0) {
-        // Try with even lower threshold
         const fallbackBatch = await api.getSuggestedBuddies(10, 10, suggested.length);
         if (fallbackBatch.length === 0) {
           setHasMore(false);
         } else {
-          setSuggested(prev => [...prev, ...fallbackBatch]);
-          setHasMore(true); // Keep trying
+          setSuggested((prev) => [...prev, ...fallbackBatch]);
+          setHasMore(true);
         }
       } else {
-        setSuggested(prev => [...prev, ...nextBatch]);
-        setHasMore(true); // Always assume more available
+        setSuggested((prev) => [...prev, ...nextBatch]);
+        setHasMore(true);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load more buddies:', error);
+      const msg = (error?.message || '').toLowerCase();
+      if (msg.includes('enable discovery') || msg.includes('discovery')) {
+        setDiscoveryDisabled(true);
+      }
       setHasMore(false);
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, hasMore, suggested.length]);
+  }, [loadingMore, hasMore, suggested.length, discoveryDisabled]);
 
   // Load more buddies when approaching the end
   useEffect(() => {
@@ -148,10 +166,10 @@ function BuddiesPageContent() {
       setSwipedUsers(prev => new Set(prev).add(pendingConnection.userId));
       
       await api.createBuddy(pendingConnection.userId, message);
-      
-      // Reload buddies to show the new buddy
+
+      // Reload buddies and suggested (excludes newly connected user)
       setTimeout(() => {
-        loadData();
+        loadData(true, 'discover');
       }, 500);
       
       setPendingConnection(null);
@@ -200,22 +218,36 @@ function BuddiesPageContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
         <Navbar />
-        <div className="flex items-center justify-center h-64">
-          <div className="text-gray-600">Loading...</div>
-        </div>
+        <BuddiesSkeleton />
         <BottomNav />
       </div>
     );
   }
 
-  const currentBuddy = suggested[currentIndex];
-
   return (
     <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
       <Navbar />
       
+      {/* Error Banner */}
+      {loadError && !discoveryDisabled && (
+        <div className="max-w-4xl mx-auto px-4 pt-4">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between">
+            <p className="text-amber-800 text-sm">{loadError}</p>
+            <button
+              onClick={() => setLoadError(null)}
+              className="text-amber-600 hover:text-amber-800 ml-2 flex-shrink-0"
+              aria-label="Dismiss"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Tab Navigation */}
       <div className="max-w-4xl mx-auto px-4 pt-6">
         <div className="flex items-center justify-center space-x-2 mb-6">
@@ -280,16 +312,33 @@ function BuddiesPageContent() {
               <div className="text-gray-600">Loading buddies...</div>
             </div>
           ) : suggested.length === 0 ? (
-            <div className="text-center py-16 bg-white rounded-3xl shadow-lg">
+            <div className="text-center py-16 bg-white rounded-3xl shadow-lg px-6">
               <div className="w-16 h-16 mx-auto mb-4 bg-gray-200 rounded-full flex items-center justify-center">
                 <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
               </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">No buddies available</h3>
-              <p className="text-gray-600 mb-6">
-                There are no discoverable users available right now. Check back later!
-              </p>
+              {discoveryDisabled ? (
+                <>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">Enable discovery to find buddies</h3>
+                  <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                    You need to turn on discovery in your profile before you can see suggested workout buddies. Go to Profile → Edit Profile → Discovery Settings and choose &quot;Yes, I want to explore.&quot;
+                  </p>
+                  <Link
+                    href="/profile"
+                    className="inline-block bg-[#0ef9b4] text-black px-6 py-3 rounded-xl font-semibold hover:bg-[#0dd9a0] transition-all duration-300 shadow-md hover:shadow-lg"
+                  >
+                    Enable discovery in Profile
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">No buddies available</h3>
+                  <p className="text-gray-600 mb-6">
+                    There are no discoverable users available right now. Check back later!
+                  </p>
+                </>
+              )}
             </div>
           ) : (
             <>
@@ -385,13 +434,15 @@ function BuddiesPageContent() {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-4 flex-1">
                             <Link href={`/profile?userId=${otherUser?.id}`} className="flex items-center space-x-4 flex-1">
-                              <div className="w-16 h-16 bg-gradient-to-br from-[#0ef9b4] to-[#0dd9a0] rounded-full flex items-center justify-center text-white font-bold text-xl overflow-hidden flex-shrink-0">
-                                {otherUser?.avatar_url ? (
-                                  <img src={otherUser.avatar_url} alt={otherUser.full_name || ''} className="w-16 h-16 rounded-full object-cover" />
-                                ) : (
-                                  <span>{otherUser?.full_name?.[0] || 'U'}</span>
-                                )}
-                              </div>
+                              {otherUser && (
+                                <ProfileAvatar
+                                  userId={otherUser.id}
+                                  avatarUrl={otherUser.avatar_url}
+                                  fullName={otherUser.full_name}
+                                  size="lg"
+                                  linkToProfile={false}
+                                />
+                              )}
                               <div className="flex-1">
                                 <p className="font-bold text-gray-900 text-lg">{otherUser?.full_name || 'Anonymous'}</p>
                                 <p className="text-sm text-gray-600">
@@ -468,13 +519,15 @@ function BuddiesPageContent() {
                           className="block cursor-pointer"
                         >
                           <div className="flex items-center space-x-4 pr-16">
-                            <div className="w-16 h-16 bg-gradient-to-br from-[#0ef9b4] to-[#0dd9a0] rounded-full flex items-center justify-center text-white font-bold text-xl overflow-hidden flex-shrink-0">
-                              {otherUser?.avatar_url ? (
-                                <img src={otherUser.avatar_url} alt={otherUser.full_name || ''} className="w-16 h-16 rounded-full object-cover" />
-                              ) : (
-                                <span>{otherUser?.full_name?.[0] || 'U'}</span>
-                              )}
-                            </div>
+                            {otherUser && (
+                              <ProfileAvatar
+                                userId={otherUser.id}
+                                avatarUrl={otherUser.avatar_url}
+                                fullName={otherUser.full_name}
+                                size="lg"
+                                linkToProfile={false}
+                              />
+                            )}
                             <div className="flex-1 min-w-0">
                               <p className="font-bold text-gray-900 text-lg truncate">{otherUser?.full_name || 'Anonymous'}</p>
                               <p className="text-sm text-gray-600 truncate">
@@ -583,13 +636,15 @@ function BuddiesPageContent() {
                           className="block cursor-pointer"
                         >
                           <div className="flex items-center space-x-4 pr-16">
-                            <div className="w-16 h-16 bg-gradient-to-br from-[#0ef9b4] to-[#0dd9a0] rounded-full flex items-center justify-center text-white font-bold text-xl overflow-hidden flex-shrink-0">
-                              {otherUser?.avatar_url ? (
-                                <img src={otherUser.avatar_url} alt={otherUser.full_name || ''} className="w-16 h-16 rounded-full object-cover" />
-                              ) : (
-                                <span>{otherUser?.full_name?.[0] || 'U'}</span>
-                              )}
-                            </div>
+                            {otherUser && (
+                              <ProfileAvatar
+                                userId={otherUser.id}
+                                avatarUrl={otherUser.avatar_url}
+                                fullName={otherUser.full_name}
+                                size="lg"
+                                linkToProfile={false}
+                              />
+                            )}
                             <div className="flex-1 min-w-0">
                               <p className="font-bold text-gray-900 text-lg truncate">{otherUser?.full_name || 'Anonymous'}</p>
                               <p className="text-sm text-gray-600 truncate">
@@ -655,11 +710,9 @@ function BuddiesPageContent() {
 export default function BuddiesPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
         <Navbar />
-        <div className="flex items-center justify-center h-64">
-          <div className="text-gray-600">Loading...</div>
-        </div>
+        <BuddiesSkeleton />
         <BottomNav />
       </div>
     }>

@@ -79,19 +79,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (session?.user) {
-        // Only set user if email is confirmed
         if (isEmailConfirmed(session.user)) {
-          // Fetch full user profile from API
-          import('./api').then(({ api }) => {
-            api.getCurrentUser().then(fullUser => {
-              setUser(fullUser);
-            }).catch(() => {
-              // Fallback to mapped user if API fails
-              setUser(mapSupabaseUser(session.user));
+          try {
+            const { api } = await import('./api');
+            const fullUser = await api.getCurrentUser();
+            setUser(fullUser);
+          } catch {
+            setUser(prev => {
+              if (prev?.profile_completed === true) return prev;
+              return mapSupabaseUser(session.user);
             });
-          });
+          }
         } else {
-          // Email not confirmed - don't set user
           setUser(null);
         }
       } else {
@@ -111,17 +110,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-          if (supabaseUser && isEmailConfirmed(supabaseUser)) {
-            // Fetch full user profile from API
-            try {
-              const { api } = await import('./api');
-              const fullUser = await api.getCurrentUser();
-              setUser(fullUser);
-            } catch (apiError: any) {
-              // Fallback to mapped user if API fails (e.g., backend not running)
-              console.warn('Failed to fetch full user profile from API, using Supabase user data:', apiError.message);
-              setUser(mapSupabaseUser(supabaseUser));
-            }
+      if (supabaseUser && isEmailConfirmed(supabaseUser)) {
+        try {
+          const { api } = await import('./api');
+          const fullUser = await api.getCurrentUser();
+          setUser(fullUser);
+        } catch (apiError: any) {
+          console.warn('Failed to fetch full user profile from API:', apiError.message);
+          setUser(prev => {
+            if (prev?.profile_completed === true) return prev;
+            return mapSupabaseUser(supabaseUser);
+          });
+        }
       } else {
         setUser(null);
       }

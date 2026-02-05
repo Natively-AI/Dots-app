@@ -5,10 +5,12 @@ import { useAuth } from '@/lib/auth';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import BottomNav from '@/components/BottomNav';
+import { useSports, useGoals } from '@/lib/hooks';
 import { api } from '@/lib/api';
 import { Sport, Goal, Post, Event, User } from '@/types';
 import PostCard from '@/components/PostCard';
 import CreatePostForm from '@/components/CreatePostForm';
+import ProfileAvatar from '@/components/ProfileAvatar';
 import EventManagementMenu from '@/components/EventManagementMenu';
 import { ProfileHeaderSkeleton, PostSkeleton, EventSkeleton, FormSkeleton } from '@/components/SkeletonLoader';
 import ConnectionMessageModal from '@/components/ConnectionMessageModal';
@@ -20,16 +22,25 @@ import { uploadProfileImage } from '@/lib/storage';
 type Tab = 'posts' | 'events' | 'edit';
 
 function ProfilePageContent() {
-  const { user: currentUser, refreshUser } = useAuth();
+  const { user: currentUser, loading: authLoading, refreshUser } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [viewingUserId, setViewingUserId] = useState<number | null>(null);
   const [viewingUser, setViewingUser] = useState<User | null>(null);
+  const [viewingUserLoading, setViewingUserLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('posts');
-  const [loading, setLoading] = useState(true);
+  const [contentLoading, setContentLoading] = useState(true);
+
+  // Support ?tab=events or ?tab=edit in URL
+  useEffect(() => {
+    const tabParam = searchParams?.get('tab');
+    if (tabParam === 'events' || tabParam === 'edit' || tabParam === 'posts') {
+      setActiveTab(tabParam as Tab);
+    }
+  }, [searchParams]);
   const [saving, setSaving] = useState(false);
-  const [sports, setSports] = useState<Sport[]>([]);
-  const [goals, setGoals] = useState<Goal[]>([]);
+  const { sports } = useSports();
+  const { goals } = useGoals();
   const [posts, setPosts] = useState<Post[]>([]);
   const [userEvents, setUserEvents] = useState<{ owned: Event[]; attending: Event[]; attended: Event[] }>({
     owned: [],
@@ -69,26 +80,30 @@ function ProfilePageContent() {
       const userId = parseInt(userIdParam);
       if (!isNaN(userId) && userId !== currentUser?.id) {
         setViewingUserId(userId);
-        // Load the other user's profile
+        setViewingUserLoading(true);
+        setError(null);
         api.getUser(userId)
           .then((userData) => {
             setViewingUser(userData);
-            // Check buddy status
             checkBuddyStatus(userId);
           })
           .catch((err) => {
             console.error('Failed to load user profile:', err);
             setError('Failed to load user profile');
-          });
+            setViewingUser(null);
+          })
+          .finally(() => setViewingUserLoading(false));
       } else {
         setViewingUserId(null);
         setViewingUser(null);
         setBuddyStatus('none');
+        setViewingUserLoading(false);
       }
     } else {
       setViewingUserId(null);
       setViewingUser(null);
       setBuddyStatus('none');
+      setViewingUserLoading(false);
     }
   }, [searchParams, currentUser?.id]);
 
@@ -138,6 +153,75 @@ function ProfilePageContent() {
     }
   };
 
+  // Profile is ready when we have user to display (no blocking on posts/events)
+  const profileLoading = isViewingOtherUser ? viewingUserLoading : authLoading;
+  const loading = profileLoading; // alias for compatibility
+
+  // Sync form data when user changes (for edit tab)
+  useEffect(() => {
+    if (user && !isViewingOtherUser) {
+      const userPhotos = user.photos?.map((p: { photo_url: string }) => p.photo_url) || [];
+      setFormData({
+        full_name: user.full_name || '',
+        age: user.age?.toString() || '',
+        bio: user.bio || '',
+        location: user.location || '',
+        avatar_url: user.avatar_url || '',
+        cover_image_url: user.cover_image_url || '',
+        sport_ids: user.sports?.map(s => s.id).filter(Boolean) || [],
+        goal_ids: user.goals?.map(g => g.id).filter(Boolean) || [],
+      });
+      setPhotos(userPhotos);
+      setIsDiscoverable(user.is_discoverable || false);
+    } else if (!user) {
+      setFormData({
+        full_name: '', age: '', bio: '', location: '',
+        avatar_url: '', cover_image_url: '', sport_ids: [], goal_ids: [],
+      });
+      setPhotos([]);
+      setIsDiscoverable(false);
+    }
+  }, [user, isViewingOtherUser]);
+
+  // Load posts and events in background - doesn't block profile display
+  useEffect(() => {
+    if (!user?.id) {
+      setPosts([]);
+      setUserEvents({ owned: [], attending: [], attended: [] });
+      setContentLoading(false);
+      return;
+    }
+    let isMounted = true;
+    setContentLoading(true);
+    setError(null);
+    const loadContent = async () => {
+      try {
+        if (isViewingOtherUser) {
+          const postsData = await api.getPosts(user.id).catch(() => []);
+          if (isMounted) {
+            setPosts(postsData || []);
+            setUserEvents({ owned: [], attending: [], attended: [] });
+          }
+        } else {
+          const [postsData, eventsData] = await Promise.all([
+            api.getPosts(user.id).catch(() => []),
+            api.getMyEvents().catch(() => ({ owned: [], attending: [], attended: [] })),
+          ]);
+          if (isMounted) {
+            setPosts(postsData || []);
+            setUserEvents(eventsData || { owned: [], attending: [], attended: [] });
+          }
+        }
+      } catch {
+        if (isMounted) setPosts([]);
+      } finally {
+        if (isMounted) setContentLoading(false);
+      }
+    };
+    loadContent();
+    return () => { isMounted = false; };
+  }, [user?.id, isViewingOtherUser]);
+
   const loadData = async () => {
     // Reload all data
     if (user && user.id) {
@@ -162,143 +246,6 @@ function ProfilePageContent() {
       }
     }
   };
-
-  useEffect(() => {
-    let isMounted = true;
-    const loadDataWithTimeout = async () => {
-      setLoading(true);
-      
-      // Set a timeout to ensure loading doesn't hang forever
-      const timeoutId = setTimeout(() => {
-        if (isMounted) {
-          console.warn('Profile data loading timeout - setting loading to false');
-          setLoading(false);
-        }
-      }, 10000); // 10 second timeout
-
-      try {
-        // Load sports and goals regardless of user (they're needed for the form)
-        const [sportsData, goalsData] = await Promise.all([
-          api.getSports().catch((err) => {
-            console.error('Failed to load sports:', err);
-            return [];
-          }),
-          api.getGoals().catch((err) => {
-            console.error('Failed to load goals:', err);
-            return [];
-          }),
-        ]);
-        
-        if (!isMounted) return;
-        
-        setSports(sportsData);
-        setGoals(goalsData);
-
-        // Only load user-specific data if user exists and has an ID
-        if (user && user.id) {
-          try {
-            setError(null); // Clear any previous errors
-            
-            if (isViewingOtherUser) {
-              // Viewing another user - only load their posts
-              const postsData = await api.getPosts(user.id).catch((err) => {
-                console.error('Failed to load posts:', err);
-                return [];
-              });
-              
-              if (!isMounted) return;
-              
-              setPosts(postsData || []);
-              setUserEvents({ owned: [], attending: [], attended: [] });
-            } else {
-              // Viewing own profile - load posts and events
-              const [postsData, eventsData] = await Promise.all([
-                api.getPosts(user.id).catch((err) => {
-                  console.error('Failed to load posts:', err);
-                  return [];
-                }),
-                api.getMyEvents().catch((err) => {
-                  console.error('Failed to load events:', err);
-                  return { owned: [], attending: [], attended: [] };
-                }),
-              ]);
-              
-              if (!isMounted) return;
-              
-              setPosts(postsData || []);
-              setUserEvents(eventsData || { owned: [], attending: [], attended: [] });
-
-              // Set form data and photos
-              const userPhotos = user?.photos?.map((p: any) => p.photo_url) || [];
-              setFormData({
-                full_name: user?.full_name || '',
-                age: user?.age?.toString() || '',
-                bio: user?.bio || '',
-                location: user?.location || '',
-                avatar_url: user?.avatar_url || '',
-                cover_image_url: user?.cover_image_url || '',
-                sport_ids: user?.sports?.map(s => s.id).filter(Boolean) || [],
-                goal_ids: user?.goals?.map(g => g.id).filter(Boolean) || [],
-              });
-              setPhotos(userPhotos);
-              setIsDiscoverable(user?.is_discoverable || false);
-            }
-          } catch (error) {
-            console.error('Failed to load user-specific data:', error);
-            // Set defaults even on error
-            if (isMounted) {
-              setPosts([]);
-              setUserEvents({ owned: [], attending: [], attended: [] });
-              const userPhotos = user?.photos?.map((p: any) => p.photo_url) || [];
-              setFormData({
-                full_name: user?.full_name || '',
-                age: user?.age?.toString() || '',
-                bio: user?.bio || '',
-                location: user?.location || '',
-                avatar_url: user?.avatar_url || '',
-                cover_image_url: user?.cover_image_url || '',
-                sport_ids: user?.sports?.map(s => s.id).filter(Boolean) || [],
-                goal_ids: user?.goals?.map(g => g.id).filter(Boolean) || [],
-              });
-              setPhotos(userPhotos);
-              setIsDiscoverable(user?.is_discoverable || false);
-            }
-          }
-        } else {
-          // Reset user-specific data if no user
-          if (isMounted) {
-            setPosts([]);
-            setUserEvents({ owned: [], attending: [], attended: [] });
-            setFormData({
-              full_name: '',
-              age: '',
-              bio: '',
-              location: '',
-              avatar_url: '',
-              cover_image_url: '',
-              sport_ids: [],
-              goal_ids: [],
-            });
-            setPhotos([]);
-            setIsDiscoverable(false);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to load data:', error);
-      } finally {
-        clearTimeout(timeoutId);
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    loadDataWithTimeout();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [user]);
 
   const handlePostCreated = (newPost: Post) => {
     setPosts([newPost, ...posts]);
@@ -439,51 +386,21 @@ function ProfilePageContent() {
         throw new Error('User not found');
       }
 
-      // Upload images to Supabase Storage
-      let avatarUrl = formData.avatar_url;
-      let coverImageUrl = formData.cover_image_url;
-
-      if (avatarFile) {
-        try {
-          console.log(`[Profile Update] Uploading avatar for user ${userId}...`);
-          avatarUrl = await uploadProfileImage(avatarFile, 'avatar', userId);
-          console.log(`[Profile Update] Avatar uploaded successfully: ${avatarUrl}`);
-        } catch (error: any) {
-          console.error(`[Profile Update Error] Failed to upload avatar for user ${userId}:`, {
-            fileName: avatarFile.name,
-            fileSize: `${(avatarFile.size / 1024 / 1024).toFixed(2)} MB`,
-            fileType: avatarFile.type,
-            userId,
-            error: error.message,
-            stack: error.stack
-          });
-          alert(`Failed to upload avatar: ${error.message}`);
-          setUploadingImages(false);
-          setSaving(false);
-          return;
-        }
-      }
-
-      if (coverFile) {
-        try {
-          console.log(`[Profile Update] Uploading cover image for user ${userId}...`);
-          coverImageUrl = await uploadProfileImage(coverFile, 'cover', userId);
-          console.log(`[Profile Update] Cover image uploaded successfully: ${coverImageUrl}`);
-        } catch (error: any) {
-          console.error(`[Profile Update Error] Failed to upload cover image for user ${userId}:`, {
-            fileName: coverFile.name,
-            fileSize: `${(coverFile.size / 1024 / 1024).toFixed(2)} MB`,
-            fileType: coverFile.type,
-            userId,
-            error: error.message,
-            stack: error.stack
-          });
-          alert(`Failed to upload cover image: ${error.message}`);
-          setUploadingImages(false);
-          setSaving(false);
-          return;
-        }
-      }
+      // Upload avatar and cover in parallel for faster saves
+      const [avatarUrl, coverImageUrl] = await Promise.all([
+        avatarFile
+          ? uploadProfileImage(avatarFile, 'avatar', userId).catch((err: Error) => {
+              alert(`Failed to upload avatar: ${err.message}`);
+              throw err;
+            })
+          : Promise.resolve(formData.avatar_url),
+        coverFile
+          ? uploadProfileImage(coverFile, 'cover', userId).catch((err: Error) => {
+              alert(`Failed to upload cover image: ${err.message}`);
+              throw err;
+            })
+          : Promise.resolve(formData.cover_image_url),
+      ]);
 
       // Update basic profile info with uploaded image URLs
       const updateData = {
@@ -495,41 +412,26 @@ function ProfilePageContent() {
       };
       await api.updateUser(updateData);
 
-      // Update photos - delete existing and add new ones
-      if (user?.photos) {
-        for (const p of user.photos) {
-          try {
-            await api.deleteUserPhoto(p.id);
-          } catch (error) {
-            console.error('Failed to delete photo:', error);
-          }
-        }
+      // Delete existing photos in parallel (don't block on failures)
+      if (user?.photos?.length) {
+        await Promise.allSettled(user.photos.map((p) => api.deleteUserPhoto(p.id)));
       }
-      
-      // Upload new photos to Supabase Storage
-      for (let i = 0; i < photoFiles.length; i++) {
-        if (photoFiles[i]) {
-          try {
-            const file = photoFiles[i]!;
-            console.log(`[Profile Update] Uploading photo ${i + 1} for user ${userId}...`);
-            const photoUrl = await uploadProfileImage(file, 'photo', userId);
-            console.log(`[Profile Update] Photo ${i + 1} uploaded successfully: ${photoUrl}`);
-            await api.addUserPhoto(photoUrl, i);
-            console.log(`[Profile Update] Photo ${i + 1} added to user profile`);
-          } catch (error: any) {
-            const file = photoFiles[i]!;
-            console.error(`[Profile Update Error] Failed to upload photo ${i + 1} for user ${userId}:`, {
-              photoIndex: i + 1,
-              fileName: file.name,
-              fileSize: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
-              fileType: file.type,
-              userId,
-              error: error.message,
-              stack: error.stack
-            });
-            alert(`Failed to upload photo ${i + 1}: ${error.message}`);
-          }
-        }
+
+      // Upload new photos and add to profile in parallel
+      const photoPromises = photoFiles
+        .map((file, index) => (file ? { file, index } : null))
+        .filter((x): x is { file: File; index: number } => x !== null);
+
+      const photoResults = await Promise.allSettled(
+        photoPromises.map(async ({ file, index }) => {
+          const photoUrl = await uploadProfileImage(file, 'photo', userId);
+          await api.addUserPhoto(photoUrl, index);
+        })
+      );
+
+      const photoError = photoResults.find((r) => r.status === 'rejected');
+      if (photoError && photoError.status === 'rejected') {
+        throw photoError.reason;
       }
 
       // Reset file states
@@ -538,6 +440,7 @@ function ProfilePageContent() {
       setPhotoFiles([]);
 
       await refreshUser();
+      setActiveTab('posts');
       alert('Profile updated successfully!');
     } catch (error: any) {
       alert(error.message || 'Failed to update profile');
@@ -619,10 +522,10 @@ function ProfilePageContent() {
         </div>
       )}
       
-      {/* Profile Header with Cover Image */}
+      {/* Profile Header - Facebook-style */}
       <div className="bg-white border-b border-gray-200">
-        {/* Cover Image */}
-        <div className="relative h-64 md:h-80 bg-gradient-to-br from-[#0ef9b4] via-[#0dd9a0] to-[#0ef9b4] overflow-hidden">
+        {/* Cover Photo - full width, ~2.5:1 aspect ratio like Facebook */}
+        <div className="relative w-full h-48 sm:h-56 md:h-64 bg-gradient-to-br from-[#0ef9b4] via-[#0dd9a0] to-[#0ef9b4] overflow-hidden">
           {user?.cover_image_url ? (
             <Image
               src={user.cover_image_url ?? undefined}
@@ -632,89 +535,104 @@ function ProfilePageContent() {
               priority
             />
           ) : (
-            <div className="w-full h-full bg-gradient-to-br from-[#0ef9b4] via-[#0dd9a0] to-[#0ef9b4]"></div>
+            <div className="w-full h-full bg-gradient-to-br from-[#0ef9b4] via-[#0dd9a0] to-[#0ef9b4]" />
           )}
-          {/* Edit Cover Button (only for own profile when on edit tab) */}
+          {/* Edit Cover Button - only when on edit tab */}
           {user && activeTab === 'edit' && (
-            <div className="absolute top-[45px] right-4">
-              <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-black/50 hover:bg-black/70 text-white rounded-lg font-medium transition-colors backdrop-blur-sm">
+            <div className="absolute bottom-4 right-4">
+              <label
+                htmlFor="header-cover-upload"
+                className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-black/60 hover:bg-black/80 text-white rounded-lg font-medium text-sm transition-colors backdrop-blur-sm"
+              >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                 </svg>
-                Change Cover
+                {user.cover_image_url ? 'Change Cover' : 'Add Cover Photo'}
+                <input
+                  id="header-cover-upload"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleImageUpload('cover', file);
+                    e.target.value = '';
+                  }}
+                  disabled={saving || uploadingImages}
+                />
               </label>
             </div>
           )}
         </div>
 
-        <div className="max-w-4xl mx-auto px-4 pb-6">
-          {/* Profile Picture and Info */}
-          <div className="flex items-end gap-4 -mt-16 mb-4">
-            <div className="relative">
-              <div className="w-32 h-32 rounded-full bg-white p-1 flex items-center justify-center overflow-hidden flex-shrink-0 shadow-lg">
-                <div className="w-full h-full rounded-full bg-[#0ef9b4] flex items-center justify-center overflow-hidden">
-                  {user?.avatar_url ? (
-                    <Image
-                      src={user.avatar_url}
-                      alt={user.full_name || 'User'}
-                      width={128}
-                      height={128}
-                      className="object-cover"
-                    />
-                  ) : (
-                    <span className="text-4xl text-black font-bold">
-                      {user?.full_name?.charAt(0).toUpperCase() || 'U'}
-                    </span>
-                  )}
+        {/* Profile section - overlapping profile pic like Facebook */}
+        <div className="max-w-4xl mx-auto px-4 sm:px-6">
+          <div className="relative flex flex-col sm:flex-row sm:items-end gap-4 -mt-16 sm:-mt-20 pb-4">
+            {/* Profile Picture - large, overlaps cover, bottom-left */}
+            <div className="relative flex-shrink-0 w-32 h-32 sm:w-36 sm:h-36 md:w-40 md:h-40 rounded-full ring-4 ring-white shadow-xl overflow-hidden bg-white">
+              {user?.avatar_url ? (
+                <Image
+                  src={user.avatar_url}
+                  alt={user.full_name || 'User'}
+                  fill
+                  className="object-cover"
+                />
+              ) : (
+                <div className="w-full h-full bg-[#0ef9b4] flex items-center justify-center">
+                  <span className="text-4xl sm:text-5xl text-black font-bold">
+                    {user?.full_name?.charAt(0).toUpperCase() || 'U'}
+                  </span>
                 </div>
-              </div>
+              )}
             </div>
-            <div className="flex-1 pb-4">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <h1 className="text-3xl font-bold text-gray-900 mb-1">{user?.full_name || 'Guest User'}</h1>
-                  {user?.location && (
-                    <p className="text-gray-600 mb-2">{user.location}</p>
-                  )}
-                  {user?.bio && (
-                    <p className="text-gray-600">{user.bio}</p>
-                  )}
-                  {!user && (
-                    <p className="text-gray-500 text-sm">Sign in to view your profile</p>
-                  )}
-                </div>
-                {/* Connect Button - Show when viewing another user */}
-                {isViewingOtherUser && currentUser && (
-                  <div className="ml-4">
-                    {buddyStatus === 'loading' ? (
-                      <div className="px-6 py-2 bg-gray-100 rounded-xl text-gray-600">Loading...</div>
-                    ) : buddyStatus === 'none' ? (
-                      <button
-                        onClick={handleConnect}
-                        className="px-6 py-2 bg-[#0ef9b4] text-black rounded-xl font-semibold hover:bg-[#0dd9a0] transition-colors shadow-md hover:shadow-lg"
-                      >
-                        Connect
-                      </button>
-                    ) : buddyStatus === 'pending' ? (
-                      <div className="px-6 py-2 bg-gray-200 text-gray-700 rounded-xl font-semibold">
-                        Request Sent
-                      </div>
-                    ) : buddyStatus === 'accepted' ? (
-                      <Link
-                        href={`/messages?user=${viewingUser.id}`}
-                        className="inline-block px-6 py-2 bg-[#0ef9b4] text-black rounded-xl font-semibold hover:bg-[#0dd9a0] transition-colors shadow-md hover:shadow-lg"
-                      >
-                        Message
-                      </Link>
-                    ) : null}
-                  </div>
+            {/* Name and actions row */}
+            <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 pb-1">
+              <div className="min-w-0">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 truncate">{user?.full_name || 'Guest User'}</h1>
+                {(user?.location || (user?.sports && user.sports.length > 0)) && (
+                  <p className="text-gray-600 text-sm mt-0.5 truncate">
+                    {[user?.location, user?.sports?.map(s => s.name).join(', ')].filter(Boolean).join(' · ')}
+                  </p>
                 )}
               </div>
+              {isViewingOtherUser && currentUser && (
+                <div className="flex-shrink-0">
+                  {buddyStatus === 'loading' ? (
+                    <div className="px-5 py-2 bg-gray-100 rounded-lg text-gray-600 text-sm">Loading...</div>
+                  ) : buddyStatus === 'none' ? (
+                    <button
+                      onClick={handleConnect}
+                      className="px-5 py-2 bg-[#0ef9b4] text-black rounded-lg font-semibold hover:bg-[#0dd9a0] transition-colors text-sm"
+                    >
+                      Connect
+                    </button>
+                  ) : buddyStatus === 'pending' ? (
+                    <div className="px-5 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold text-sm">
+                      Request Sent
+                    </div>
+                  ) : buddyStatus === 'accepted' ? (
+                    <Link
+                      href={'/messages?user=' + viewingUser.id}
+                      className="inline-block px-5 py-2 bg-[#0ef9b4] text-black rounded-lg font-semibold hover:bg-[#0dd9a0] transition-colors text-sm"
+                    >
+                      Message
+                    </Link>
+                  ) : null}
+                </div>
+              )}
             </div>
           </div>
 
+          {/* Bio - below name row, full width */}
+          {user?.bio && (
+            <p className="text-gray-600 text-sm leading-relaxed break-words max-w-2xl mb-4">{user.bio}</p>
+          )}
+          {!user && (
+            <p className="text-gray-500 text-sm mb-4">Sign in to view your profile</p>
+          )}
+
           {/* Tabs - Hide edit tab when viewing other user's profile */}
-          <div className="flex gap-4 border-b border-gray-200">
+          <div className="flex gap-4 border-b border-gray-200 -mb-px pt-1">
             <button
               onClick={() => setActiveTab('posts')}
               className={`px-4 py-2 font-medium transition-colors ${
@@ -757,22 +675,37 @@ function ProfilePageContent() {
           <div>
             {user ? (
               <>
+                {contentLoading ? (
+                  <div>
+                    <PostSkeleton />
+                    <PostSkeleton />
+                  </div>
+                ) : (
+                  <>
                 {!isViewingOtherUser && (
                   <>
                     {!showCreatePost ? (
-                      <button
-                        onClick={() => setShowCreatePost(true)}
-                        className="w-full mb-4 px-4 py-3 bg-white border border-gray-200 rounded-xl text-left hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-[#0ef9b4] flex items-center justify-center">
-                            <span className="text-black font-semibold">
-                              {user?.full_name?.charAt(0).toUpperCase() || 'U'}
-                            </span>
+                      <div className="flex items-center gap-3 w-full mb-4 px-4 py-3 bg-white border border-gray-200 rounded-xl">
+                        {user && (
+                          <ProfileAvatar
+                            userId={user.id}
+                            avatarUrl={user.avatar_url}
+                            fullName={user.full_name}
+                            size="sm"
+                          />
+                        )}
+                        {!user && (
+                          <div className="w-10 h-10 rounded-full bg-[#0ef9b4] flex items-center justify-center flex-shrink-0">
+                            <span className="text-black font-semibold">U</span>
                           </div>
-                          <span className="text-gray-500">What's on your mind?</span>
-                        </div>
-                      </button>
+                        )}
+                        <button
+                          onClick={() => setShowCreatePost(true)}
+                          className="flex-1 text-left text-gray-500 hover:text-gray-700 transition-colors"
+                        >
+                          What's on your mind?
+                        </button>
+                      </div>
                     ) : (
                       <CreatePostForm
                         onPostCreated={handlePostCreated}
@@ -808,6 +741,8 @@ function ProfilePageContent() {
                     ))
                   )}
                 </div>
+                  </>
+                )}
               </>
             ) : (
               <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
@@ -827,6 +762,15 @@ function ProfilePageContent() {
         {activeTab === 'events' && (
           <div className="space-y-6">
             {user ? (
+              contentLoading ? (
+                <div className="space-y-6">
+                  <div>
+                    <div className="h-6 w-24 mb-4 bg-gray-200 rounded animate-pulse" />
+                    <EventSkeleton />
+                    <EventSkeleton />
+                  </div>
+                </div>
+              ) : (
               <>
                 {/* Owned Events */}
                 <div>
@@ -905,6 +849,7 @@ function ProfilePageContent() {
               )}
             </div>
               </>
+              )
             ) : (
               <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
                 <p className="text-gray-500 mb-4">Please sign in to view your events</p>
@@ -1261,10 +1206,12 @@ function ProfilePageContent() {
 export default function ProfilePage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
         <Navbar />
-        <div className="flex items-center justify-center h-64">
-          <div className="text-gray-600">Loading...</div>
+        <ProfileHeaderSkeleton />
+        <div className="max-w-4xl mx-auto px-4 py-6">
+          <PostSkeleton />
+          <PostSkeleton />
         </div>
         <BottomNav />
       </div>

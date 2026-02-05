@@ -391,13 +391,14 @@ export class ApiClient {
   async getEvent(eventId: number): Promise<Event> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const token = await this.getToken();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
 
     try {
       const response = await fetch(`${this.baseUrl}/events/${eventId}`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         signal: controller.signal,
       });
 
@@ -489,6 +490,39 @@ export class ApiClient {
       }
 
       return response.json();
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - please check your connection');
+      }
+      throw error;
+    }
+  }
+
+  async deleteEvent(eventId: number): Promise<void> {
+    const token = await this.getToken();
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const response = await fetch(`${this.baseUrl}/events/${eventId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Failed to delete event' }));
+        throw new Error(error.detail || 'Failed to delete event');
+      }
     } catch (error: any) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
@@ -670,6 +704,39 @@ export class ApiClient {
     }
   }
 
+  async removeParticipant(eventId: number, userId: number): Promise<void> {
+    const token = await this.getToken();
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    try {
+      const response = await fetch(`${this.baseUrl}/events/${eventId}/rsvps/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Failed to remove participant' }));
+        throw new Error(error.detail || 'Failed to remove participant');
+      }
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - please check your connection');
+      }
+      throw error;
+    }
+  }
+
   // Buddies
   async getSuggestedBuddies(limit = 10, minScore = 30, offset = 0): Promise<any[]> {
     const token = await this.getToken();
@@ -699,8 +766,19 @@ export class ApiClient {
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'Failed to fetch suggested buddies');
-        console.error('getSuggestedBuddies error:', errorText);
-        throw new Error(errorText || 'Failed to fetch suggested buddies');
+        let detail = 'Failed to fetch suggested buddies';
+        try {
+          const errJson = JSON.parse(errorText);
+          detail = errJson.detail || detail;
+        } catch {
+          detail = errorText || detail;
+        }
+        const detailStr = typeof detail === 'string' ? detail : JSON.stringify(detail);
+        if (response.status === 403 && detailStr.toLowerCase().includes('discovery')) {
+          return [];
+        }
+        console.error('getSuggestedBuddies error:', detailStr);
+        throw new Error(detailStr);
       }
 
       return response.json();
@@ -743,7 +821,18 @@ export class ApiClient {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error('Failed to fetch buddies');
+        const errorText = await response.text().catch(() => '');
+        let detail = 'Failed to fetch buddies';
+        try {
+          const err = JSON.parse(errorText);
+          detail = err.detail || detail;
+        } catch {
+          detail = errorText || detail;
+        }
+        if (response.status >= 500 || (detail && typeof detail === 'string' && detail.toLowerCase().includes('server disconnected'))) {
+          return [];
+        }
+        throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
       }
 
       return response.json();
@@ -751,6 +840,9 @@ export class ApiClient {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
         throw new Error('Request timeout - please check your connection');
+      }
+      if (error.message === 'Failed to fetch' || error.message?.includes('fetch')) {
+        return [];
       }
       throw error;
     }
@@ -901,9 +993,19 @@ export class ApiClient {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        const errorText = await response.text().catch(() => 'Failed to fetch conversations');
-        console.error('getConversations error:', errorText);
-        throw new Error(errorText || 'Failed to fetch conversations');
+        const errorText = await response.text().catch(() => '');
+        let detail = 'Failed to fetch conversations';
+        try {
+          const err = JSON.parse(errorText);
+          detail = err.detail ?? detail;
+        } catch {
+          detail = errorText || detail;
+        }
+        const detailStr = typeof detail === 'string' ? detail : JSON.stringify(detail);
+        if (response.status >= 500 || detailStr.toLowerCase().includes('server disconnected')) {
+          return [];
+        }
+        throw new Error(detailStr);
       }
 
       return response.json();
@@ -912,11 +1014,9 @@ export class ApiClient {
       if (error.name === 'AbortError') {
         throw new Error('Request timeout - please check your connection');
       }
-      if (error.message === 'Failed to fetch' || error.message.includes('fetch')) {
-        console.warn('Backend not available for getConversations, returning empty array');
+      if (error.message === 'Failed to fetch' || error.message?.includes('fetch')) {
         return [];
       }
-      console.error('getConversations error:', error);
       throw error;
     }
   }

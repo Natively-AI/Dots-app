@@ -29,6 +29,7 @@ class EventUpdate(BaseModel):
     max_participants: Optional[int] = None
     is_cancelled: Optional[bool] = None
     is_public: Optional[bool] = None
+    image_url: Optional[str] = None
     cover_image_url: Optional[str] = None
 
 
@@ -51,4 +52,5 @@ class EventDetail(EventResponse):
     host: dict = {}
     sport: dict = {}
     participants: List[dict] = []
+    rsvp_status: Optional[str] = None  # Current user's status: pending, approved, rejected (when authenticated)
 

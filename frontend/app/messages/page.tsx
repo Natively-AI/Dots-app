@@ -7,6 +7,8 @@ import { useAuth } from '@/lib/auth';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import BottomNav from '@/components/BottomNav';
+import { MessagesSkeleton } from '@/components/SkeletonLoader';
+import ProfileAvatar from '@/components/ProfileAvatar';
 import { api } from '@/lib/api';
 import { Conversation, Message } from '@/types';
 import { uploadImage } from '@/lib/storage';
@@ -208,11 +210,9 @@ function MessagesPageContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#E5DDD5]">
+      <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
         <Navbar />
-        <div className="flex items-center justify-center h-64">
-          <div className="text-gray-600">Loading...</div>
-        </div>
+        <MessagesSkeleton />
         <BottomNav />
       </div>
     );
@@ -269,42 +269,50 @@ function MessagesPageContent() {
               conversations.map((conv) => {
                 const isSelected = selectedConversation === conv.id && conversationType === conv.type;
                 return (
-                  <button
+                  <div
                     key={`${conv.type}-${conv.id}`}
+                    role="button"
+                    tabIndex={0}
                     onClick={async () => {
                       setSelectedConversation(conv.id);
                       setConversationType(conv.type);
                       router.push(`/messages?id=${conv.id}&type=${conv.type}`);
-                      // Mark as read immediately when opening
                       if (conv.unread_count > 0) {
                         await api.markConversationRead(conv.id, conv.type);
                         await loadConversations();
                       }
                     }}
-                    className={`w-full p-4 text-left border-b border-gray-100 hover:bg-[#E6F9F4] transition-colors ${
+                    className={`w-full p-4 text-left border-b border-gray-100 hover:bg-[#E6F9F4] transition-colors cursor-pointer ${
                       isSelected ? 'bg-[#E6F9F4] border-l-4 border-l-[#0ef9b4]' : 'bg-white'
                     }`}
                   >
                     <div className="flex items-center space-x-3">
-                      {/* Avatar */}
-                      <div className="relative flex-shrink-0">
-                        <div className="w-12 h-12 bg-gradient-to-br from-[#0ef9b4] to-[#0dd9a0] rounded-full flex items-center justify-center text-white font-semibold overflow-hidden">
-                          {conv.avatar_url ? (
-                            <img 
-                              src={conv.avatar_url} 
-                              alt={conv.name} 
-                              className="w-full h-full object-cover" 
-                            />
-                          ) : (
-                            <span className="text-lg">{conv.name[0]?.toUpperCase() || '?'}</span>
-                          )}
-                        </div>
-                        {conv.type === 'group' && (
-                          <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-[#0ef9b4] rounded-full border-2 border-white flex items-center justify-center">
-                            <svg className="w-2.5 h-2.5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                            </svg>
-                          </div>
+                      {/* Avatar - links to profile for user convs */}
+                      <div className="relative flex-shrink-0" onClick={(e) => conv.type === 'user' && e.stopPropagation()}>
+                        {conv.type === 'user' ? (
+                          <ProfileAvatar
+                            userId={conv.id}
+                            avatarUrl={conv.avatar_url}
+                            fullName={conv.name}
+                            size="md"
+                          />
+                        ) : (
+                          <>
+                            <div className="w-12 h-12 bg-gradient-to-br from-[#0ef9b4] to-[#0dd9a0] rounded-full flex items-center justify-center text-white font-semibold overflow-hidden">
+                              {conv.avatar_url ? (
+                                <img src={conv.avatar_url} alt={conv.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="text-lg">{conv.name[0]?.toUpperCase() || '?'}</span>
+                              )}
+                            </div>
+                            {conv.type === 'group' && (
+                              <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-[#0ef9b4] rounded-full border-2 border-white flex items-center justify-center">
+                                <svg className="w-2.5 h-2.5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                </svg>
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                       
@@ -330,7 +338,7 @@ function MessagesPageContent() {
                         </div>
                       </div>
                     </div>
-                  </button>
+                  </div>
                 );
               })
             )}
@@ -355,24 +363,29 @@ function MessagesPageContent() {
                   >
                     ←
                   </button>
-                  <div className="w-10 h-10 bg-gradient-to-br from-[#0ef9b4] to-[#0dd9a0] rounded-full flex items-center justify-center text-white font-semibold overflow-hidden flex-shrink-0">
-                    {selectedConv?.avatar_url ? (
-                      <img 
-                        src={selectedConv.avatar_url} 
-                        alt={selectedConv.name} 
-                        className="w-full h-full object-cover" 
-                      />
-                    ) : (
-                      <span>{selectedConv?.name[0]?.toUpperCase() || '?'}</span>
-                    )}
-                  </div>
+                  {conversationType === 'user' ? (
+                    <ProfileAvatar
+                      userId={selectedConversation}
+                      avatarUrl={selectedConv?.avatar_url}
+                      fullName={selectedConv?.name}
+                      size="sm"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 bg-gradient-to-br from-[#0ef9b4] to-[#0dd9a0] rounded-full flex items-center justify-center text-white font-semibold overflow-hidden flex-shrink-0">
+                      {selectedConv?.avatar_url ? (
+                        <img src={selectedConv.avatar_url} alt={selectedConv.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span>{selectedConv?.name[0]?.toUpperCase() || '?'}</span>
+                      )}
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <Link
                       href={conversationType === 'group' 
                         ? `/messages/groups/${selectedConversation}/settings`
                         : conversationType === 'event'
                         ? `/events/${selectedConversation}`
-                        : `/profile/${selectedConversation}`
+                        : `/profile?userId=${selectedConversation}`
                       }
                       className="block"
                     >
@@ -421,18 +434,13 @@ function MessagesPageContent() {
 
                     return (
                       <div key={message.id} className={`flex items-end space-x-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
-                        {!isMe && showAvatar && (
-                          <div className="w-8 h-8 bg-gradient-to-br from-[#0ef9b4] to-[#0dd9a0] rounded-full flex items-center justify-center text-white text-xs font-semibold overflow-hidden flex-shrink-0">
-                            {message.sender?.avatar_url ? (
-                              <img 
-                                src={message.sender.avatar_url} 
-                                alt={message.sender.full_name || ''} 
-                                className="w-full h-full object-cover" 
-                              />
-                            ) : (
-                              <span>{message.sender?.full_name?.[0]?.toUpperCase() || '?'}</span>
-                            )}
-                          </div>
+                        {!isMe && showAvatar && message.sender && (
+                          <ProfileAvatar
+                            userId={message.sender.id}
+                            avatarUrl={message.sender.avatar_url}
+                            fullName={message.sender.full_name}
+                            size="xs"
+                          />
                         )}
                         {!isMe && !showAvatar && <div className="w-8" />}
                         <div className={`flex flex-col max-w-[70%] md:max-w-[60%] ${isMe ? 'items-end' : 'items-start'}`}>
@@ -609,11 +617,9 @@ function MessagesPageContent() {
 export default function MessagesPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-white">
+      <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
         <Navbar />
-        <div className="flex items-center justify-center h-64">
-          <div className="text-gray-600">Loading...</div>
-        </div>
+        <MessagesSkeleton />
         <BottomNav />
       </div>
     }>

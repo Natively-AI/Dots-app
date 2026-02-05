@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Event } from '@/types';
+import ProfileAvatar from './ProfileAvatar';
 
 interface EventCardLargeProps {
   event: Event;
@@ -41,12 +42,15 @@ export default function EventCardLarge({ event }: EventCardLargeProps) {
 
   const sportStyle = event.sport ? sportStyles[event.sport.name] || { icon: '🏃', gradient: 'from-[#0ef9b4] to-[#0dd9a0]' } : { icon: '🏃', gradient: 'from-[#0ef9b4] to-[#0dd9a0]' };
 
+  const hasImage = (event.image_url || event.cover_image_url) && !imageError;
+  const headerBgClass = hasImage ? 'relative h-64 overflow-hidden' : 'relative h-64 overflow-hidden bg-gradient-to-br ' + sportStyle.gradient;
+
   return (
-    <Link href={`/events/${event.id}`}>
-      <div className="group bg-white rounded-3xl overflow-hidden border border-gray-100 hover:shadow-2xl transition-all duration-300 hover:-translate-y-1.5">
+    <div className="group bg-white rounded-3xl overflow-hidden border border-gray-100 hover:shadow-2xl transition-all duration-300 hover:-translate-y-1.5">
+      <Link href={'/events/' + event.id} className="block">
         {/* Event Image/Header */}
-        <div className={`relative h-64 overflow-hidden ${(event.image_url || event.cover_image_url) && !imageError ? '' : `bg-gradient-to-br ${sportStyle.gradient}`}`}>
-          {(event.image_url || event.cover_image_url) && !imageError ? (
+        <div className={headerBgClass}>
+          {hasImage ? (
             <>
               <img 
                 src={(event.image_url || event.cover_image_url) ?? undefined} 
@@ -59,7 +63,7 @@ export default function EventCardLarge({ event }: EventCardLargeProps) {
             </>
           ) : (
             <>
-              <div className={`absolute inset-0 bg-gradient-to-br ${sportStyle.gradient}`} />
+              <div className={'absolute inset-0 bg-gradient-to-br ' + sportStyle.gradient} />
               <div className="relative z-10 flex items-center justify-center h-full">
                 <div className="text-6xl transform group-hover:scale-110 transition-transform duration-300">
                   {sportStyle.icon}
@@ -84,7 +88,7 @@ export default function EventCardLarge({ event }: EventCardLargeProps) {
             <span className="text-xs">👥</span>
             <span className="text-xs font-semibold text-gray-700">
               {event.participant_count}
-              {event.max_participants && `/${event.max_participants}`}
+              {event.max_participants != null && '/' + event.max_participants}
             </span>
           </div>
         </div>
@@ -101,48 +105,43 @@ export default function EventCardLarge({ event }: EventCardLargeProps) {
             </p>
           )}
 
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
-                <span className="text-base">📍</span>
-                <span className="truncate max-w-[200px]">{event.location}</span>
-              </div>
-              
-              {event.sport && (
-                <span className="px-3 py-1.5 bg-[#E6F9F4] text-[#0dd9a0] rounded-full text-xs font-semibold">
-                  {event.sport.name}
-                </span>
-              )}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2 text-sm text-gray-600">
+              <span className="text-base">📍</span>
+              <span className="truncate max-w-[200px]">{event.location}</span>
             </div>
 
-            {/* Host Information */}
-            {event.host && (
-              <div className="flex items-center space-x-3 pt-4 border-t border-gray-100">
-                <div className="w-10 h-10 rounded-full bg-[#0ef9b4] flex items-center justify-center flex-shrink-0 overflow-hidden">
-                  {event.host.avatar_url ? (
-                    <img
-                      src={event.host.avatar_url}
-                      alt={event.host.full_name || 'Host'}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-black font-semibold text-sm">
-                      {event.host.full_name?.charAt(0).toUpperCase() || 'H'}
-                    </span>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-500 uppercase tracking-wide mb-0.5">Hosted by</p>
-                  <p className="text-sm font-semibold text-gray-900 truncate">
-                    {event.host.full_name || 'Unknown'}
-                  </p>
-                </div>
-              </div>
+            {event.sport && (
+              <span className="px-3 py-1.5 bg-[#E6F9F4] text-[#0dd9a0] rounded-full text-xs font-semibold">
+                {event.sport.name}
+              </span>
             )}
           </div>
         </div>
-      </div>
-    </Link>
+      </Link>
+
+      {/* Host - separate link to profile */}
+      {event.host && (
+        <Link
+          href={'/profile?userId=' + event.host.id}
+          className="flex items-center space-x-3 p-8 pt-4 border-t border-gray-100 hover:bg-gray-50 transition-colors"
+        >
+          <ProfileAvatar
+            userId={event.host.id}
+            avatarUrl={event.host.avatar_url}
+            fullName={event.host.full_name}
+            size="sm"
+            linkToProfile={false}
+          />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-gray-500 uppercase tracking-wide mb-0.5">Hosted by</p>
+            <p className="text-sm font-semibold text-gray-900 truncate">
+              {event.host.full_name || 'Unknown'}
+            </p>
+          </div>
+        </Link>
+      )}
+    </div>
   );
 }
 

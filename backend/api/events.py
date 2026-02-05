@@ -3,7 +3,7 @@ from supabase import Client
 from typing import Optional, List
 from datetime import datetime
 from core.database import get_supabase
-from api.auth import get_current_user
+from api.auth import get_current_user, get_current_user_optional
 from schemas.event import EventCreate, EventUpdate, EventResponse, EventDetail
 
 router = APIRouter(prefix="/events", tags=["events"])
@@ -289,9 +289,10 @@ async def list_events(
 
 @router.get("/{event_id}", response_model=EventDetail)
 async def get_event(
-    event_id: int
+    event_id: int,
+    current_user: Optional[dict] = Depends(get_current_user_optional)
 ):
-    """Get event details"""
+    """Get event details. Includes rsvp_status when authenticated."""
     try:
         supabase: Client = get_supabase()
     except Exception as e:
@@ -377,7 +378,8 @@ async def get_event(
         participant_count=participant_count,
         host=host_data or {"id": event.get("host_id"), "full_name": "Unknown", "avatar_url": None, "location": None},
         sport=sport_data or {"id": event.get("sport_id"), "name": "Unknown Sport", "icon": "🏃"},
-        participants=participants
+        participants=participants,
+        rsvp_status=rsvp_status
     )
 
 
@@ -526,6 +528,58 @@ async def update_event(
     )
 
 
+@router.delete("/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_event(
+    event_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete an event (host only). RSVPs are cascade-deleted."""
+    try:
+        supabase: Client = get_supabase()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Supabase connection error: {str(e)}"
+        )
+
+    user_id = current_user.get("id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User ID not found"
+        )
+
+    try:
+        event_result = supabase.table("events").select("host_id").eq("id", event_id).single().execute()
+        if not event_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Event not found"
+            )
+        event = event_result.data
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Event not found"
+        )
+
+    if event.get("host_id") != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the event host can delete this event"
+        )
+
+    try:
+        supabase.table("events").delete().eq("id", event_id).execute()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete event: {str(e)}"
+        )
+
+
 @router.post("/{event_id}/rsvp", response_model=EventDetail)
 async def rsvp_event(
     event_id: int,
@@ -606,8 +660,8 @@ async def rsvp_event(
             # If query fails, continue (might be a connection issue)
             pass
     
-    # For public events, auto-approve. For private events, set to pending
-    rsvp_status = "approved" if event.get("is_public", True) else "pending"
+    # All RSVPs require manual host approval - no auto-approve
+    rsvp_status = "pending"
     
     # Create RSVP
     try:
@@ -859,7 +913,7 @@ async def get_event_rsvps(
             detail="Only the event host can view RSVPs"
         )
     
-    # Get all RSVPs
+    # Get all RSVPs - single query for rsvps, single query for all users
     approved_users = []
     pending_users = []
     rejected_users = []
@@ -870,24 +924,15 @@ async def get_event_rsvps(
             approved_ids = [r["user_id"] for r in rsvps_result.data if r.get("status") == "approved"]
             pending_ids = [r["user_id"] for r in rsvps_result.data if r.get("status") == "pending"]
             rejected_ids = [r["user_id"] for r in rsvps_result.data if r.get("status") == "rejected"]
+            all_user_ids = list(dict.fromkeys(approved_ids + pending_ids + rejected_ids))
             
-            # Get user info for each status
-            if approved_ids:
-                approved_result = supabase.table("users").select("id, full_name, avatar_url, location").in_("id", approved_ids).execute()
-                if approved_result.data:
-                    approved_users = approved_result.data
-            
-            if pending_ids:
-                pending_result = supabase.table("users").select("id, full_name, avatar_url, location").in_("id", pending_ids).execute()
-                if pending_result.data:
-                    pending_users = pending_result.data
-            
-            if rejected_ids:
-                rejected_result = supabase.table("users").select("id, full_name, avatar_url, location").in_("id", rejected_ids).execute()
-                if rejected_result.data:
-                    rejected_users = rejected_result.data
-    except Exception as e:
-        # If query fails, return empty lists
+            if all_user_ids:
+                users_result = supabase.table("users").select("id, full_name, avatar_url, location").in_("id", all_user_ids).execute()
+                users_by_id = {u["id"]: u for u in (users_result.data or [])}
+                approved_users = [users_by_id[i] for i in approved_ids if i in users_by_id]
+                pending_users = [users_by_id[i] for i in pending_ids if i in users_by_id]
+                rejected_users = [users_by_id[i] for i in rejected_ids if i in users_by_id]
+    except Exception:
         pass
     
     return {
@@ -1064,4 +1109,59 @@ async def reject_rsvp(
             detail=f"Failed to reject RSVP: {str(e)}"
         )
     
+    return None
+
+
+@router.delete("/{event_id}/rsvps/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_participant(
+    event_id: int,
+    user_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Remove a participant from the event (host only). Works for pending or approved."""
+    try:
+        supabase: Client = get_supabase()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Supabase connection error: {str(e)}"
+        )
+
+    current_user_id = current_user.get("id")
+    if not current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User ID not found"
+        )
+
+    try:
+        event_result = supabase.table("events").select("host_id").eq("id", event_id).single().execute()
+        if not event_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Event not found"
+            )
+        event = event_result.data
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Event not found"
+        )
+
+    if event.get("host_id") != current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the event host can remove participants"
+        )
+
+    try:
+        supabase.table("event_rsvps").delete().eq("event_id", event_id).eq("user_id", user_id).execute()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to remove participant: {str(e)}"
+        )
+
     return None

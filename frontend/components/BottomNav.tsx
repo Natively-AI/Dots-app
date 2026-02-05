@@ -74,6 +74,7 @@ export default function BottomNav() {
             <Link
               key={item.href}
               href={item.href}
+              prefetch={true}
               className={`flex flex-col items-center justify-center flex-1 h-full transition-all duration-300 ${
                 active 
                   ? 'text-black scale-110' 

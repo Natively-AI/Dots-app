@@ -18,6 +18,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Dots - Meet. Move. Motivate.",
   description: "Connect with fitness enthusiasts and discover local sports events",
+  icons: {
+    icon: "/favicon.png",
+  },
 };
 
 export default function RootLayout({

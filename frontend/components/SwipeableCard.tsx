@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import PhotoGallery from './PhotoGallery';
+import ProfileAvatar from './ProfileAvatar';
 
 interface SwipeableCardProps {
   user: {
@@ -176,18 +177,15 @@ export default function SwipeableCard({ user, score, onSwipe, onViewProfile, ind
             }}
           />
           
-          {/* Avatar Badge */}
-          <div className="absolute top-4 left-4 z-10">
-            <div className="w-16 h-16 bg-white/95 backdrop-blur-md rounded-full flex items-center justify-center text-[#0ef9b4] text-2xl font-bold shadow-lg border-2 border-white/30">
-              {user.avatar_url ? (
-                <img 
-                  src={user.avatar_url} 
-                  alt={user.full_name || ''} 
-                  className="w-full h-full rounded-full object-cover"
-                />
-              ) : (
-                <span className="text-[#0dd9a0]">{initials}</span>
-              )}
+          {/* Avatar Badge - links to profile */}
+          <div className="absolute top-4 left-4 z-10" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white/95 backdrop-blur-md rounded-full p-1 shadow-lg border-2 border-white/30">
+              <ProfileAvatar
+                userId={user.id}
+                avatarUrl={user.avatar_url}
+                fullName={user.full_name}
+                size="lg"
+              />
             </div>
           </div>
 

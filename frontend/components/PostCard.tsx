@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { useState } from 'react';
 import Image from 'next/image';
 import { useAuth } from '@/lib/auth';
+import ProfileAvatar from './ProfileAvatar';
 
 interface PostCardProps {
   post: Post;
@@ -68,21 +69,19 @@ export default function PostCard({ post, onDelete, onUpdate }: PostCardProps) {
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
-            {post.user?.avatar_url ? (
-              <Image
-                src={post.user.avatar_url}
-                alt={post.user.full_name || 'User'}
-                width={40}
-                height={40}
-                className="object-cover"
-              />
-            ) : (
-              <span className="text-gray-500 font-semibold">
-                {post.user?.full_name?.charAt(0).toUpperCase() || 'U'}
-              </span>
-            )}
-          </div>
+          {post.user && (
+            <ProfileAvatar
+              userId={post.user.id}
+              avatarUrl={post.user.avatar_url}
+              fullName={post.user.full_name}
+              size="sm"
+            />
+          )}
+          {!post.user && (
+            <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+              <span className="text-gray-500 font-semibold">U</span>
+            </div>
+          )}
           <div>
             <p className="font-semibold text-gray-900">
               {post.user?.full_name || 'Anonymous'}

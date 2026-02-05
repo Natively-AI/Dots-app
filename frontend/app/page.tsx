@@ -1,83 +1,44 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '@/lib/auth';
-import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import BottomNav from '@/components/BottomNav';
 import EventCardLarge from '@/components/EventCardLarge';
+import ProfileAvatar from '@/components/ProfileAvatar';
 import SearchBar from '@/components/SearchBar';
 import FilterChips from '@/components/FilterChips';
 import { Skeleton } from '@/components/SkeletonLoader';
+import { useEvents, useSports } from '@/lib/hooks';
 import { api } from '@/lib/api';
-import { Event, Sport, User } from '@/types';
+import { Event, User } from '@/types';
 import Link from 'next/link';
 
 export default function Home() {
   const { user, loading } = useAuth();
-  const router = useRouter();
-  const [events, setEvents] = useState<Event[]>([]);
-  const [allEvents, setAllEvents] = useState<Event[]>([]);
+  const { events: eventsData, isLoading: eventsLoading } = useEvents();
+  const { sports, isLoading: sportsLoading } = useSports();
   const [people, setPeople] = useState<User[]>([]);
-  const [sports, setSports] = useState<Sport[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSport, setSelectedSport] = useState<number | null>(null);
-  const [loadingData, setLoadingData] = useState(true);
-  const [mounted, setMounted] = useState(false);
   const [searchMode, setSearchMode] = useState<'all' | 'events' | 'people'>('all');
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // Sort events by start time (upcoming first) - memoized
+  const allEvents = useMemo(() => {
+    return [...eventsData].sort((a, b) =>
+      new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+    );
+  }, [eventsData]);
 
-  useEffect(() => {
-    if (mounted) {
-      // Load data regardless of auth - let the API handle auth errors
-      loadData();
-    }
-  }, [mounted]);
-
-  useEffect(() => {
-    filterEvents();
-  }, [searchQuery, selectedSport, allEvents]);
-
-  useEffect(() => {
-    if (searchQuery.trim() && (searchMode === 'all' || searchMode === 'people')) {
-      searchPeople();
-    } else {
-      setPeople([]);
-    }
-  }, [searchQuery, searchMode]);
-
-  const loadData = async () => {
-    try {
-      const [eventsData, sportsData] = await Promise.all([
-        api.getEvents(),
-        api.getSports(),
-      ]);
-      // Sort events by start time (upcoming first)
-      const sortedEvents = eventsData.sort((a, b) => 
-        new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
-      );
-      setAllEvents(sortedEvents);
-      setEvents(sortedEvents);
-      setSports(sportsData);
-    } catch (error) {
-      console.error('Failed to load data:', error);
-    } finally {
-      setLoadingData(false);
-    }
-  };
-
-  const filterEvents = () => {
+  // Filter events based on search and sport selection
+  const events = useMemo(() => {
     let filtered = [...allEvents];
-
-    // Filter by sport
     if (selectedSport !== null) {
-      filtered = filtered.filter(event => event.sport?.id === selectedSport);
+      filtered = filtered.filter(event => {
+        const eventSportId = event.sport?.id ?? event.sport_id;
+        return Number(eventSportId) === Number(selectedSport);
+      });
     }
-
-    // Filter by search query
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(event =>
@@ -87,9 +48,18 @@ export default function Home() {
         event.sport?.name.toLowerCase().includes(query)
       );
     }
+    return filtered;
+  }, [allEvents, selectedSport, searchQuery]);
 
-    setEvents(filtered);
-  };
+  useEffect(() => {
+    if (searchQuery.trim() && (searchMode === 'all' || searchMode === 'people')) {
+      searchPeople();
+    } else {
+      setPeople([]);
+    }
+  }, [searchQuery, searchMode]);
+
+  const loadingData = eventsLoading || sportsLoading;
 
   const searchPeople = async () => {
     if (!searchQuery.trim()) {
@@ -137,7 +107,7 @@ export default function Home() {
     }
   };
 
-  if (loading || loadingData || !mounted) {
+  if (loading || loadingData) {
     return (
       <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
         <Navbar />
@@ -178,8 +148,8 @@ export default function Home() {
     );
   }
 
-  // Check if profile is incomplete - only show if user is authenticated and missing essential fields
-  const profileIncomplete = user && (!user.full_name || !user.location || !user.sports || user.sports.length === 0 || !user.goals || user.goals.length === 0);
+  // Check if profile is incomplete - only show if user is authenticated, profile_completed is not true, and missing essential fields
+  const profileIncomplete = user && user.profile_completed !== true && (!user.full_name || !user.location || !user.sports || user.sports.length === 0 || !user.goals || user.goals.length === 0);
 
   // Get featured events (first 3)
   const featuredEvents = events.slice(0, 3);
@@ -285,15 +255,13 @@ export default function Home() {
                   className="bg-white rounded-xl p-4 shadow-md border border-gray-200 hover:shadow-lg transition-all duration-300 hover:scale-[1.02]"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-[#0ef9b4] flex items-center justify-center overflow-hidden flex-shrink-0">
-                      {person.avatar_url ? (
-                        <img src={person.avatar_url} alt={person.full_name || ''} className="w-12 h-12 rounded-full object-cover" />
-                      ) : (
-                        <span className="text-black font-bold">
-                          {person.full_name?.charAt(0).toUpperCase() || 'U'}
-                        </span>
-                      )}
-                    </div>
+                    <ProfileAvatar
+                      userId={person.id}
+                      avatarUrl={person.avatar_url}
+                      fullName={person.full_name}
+                      size="md"
+                      linkToProfile={false}
+                    />
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-gray-900 truncate">{person.full_name || 'User'}</p>
                       {person.location && (

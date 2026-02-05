@@ -5,6 +5,13 @@ const nextConfig: NextConfig = {
     // Don't fail build on type errors during deployment
     ignoreBuildErrors: false,
   },
+  // Optimize production builds - smaller bundles, faster loads
+  experimental: {
+    optimizePackageImports: ['leaflet', 'react-leaflet'],
+  },
+  // Reduce blocking for faster FCP
+  compress: true,
+  poweredByHeader: false,
   images: {
     remotePatterns: [
       {

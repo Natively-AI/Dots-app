@@ -79,9 +79,11 @@ export default function EventManagementMenu({ event, onEventUpdated, onEventDele
           </div>
           
           {/* Admin Panel */}
-          <EventAdminPanel event={event} onUpdate={() => {
-            if (onEventUpdated) onEventUpdated();
-          }} />
+          <EventAdminPanel
+            event={event}
+            onUpdate={() => onEventUpdated?.()}
+            onEventDeleted={onEventDeleted}
+          />
           
           <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
             <Link

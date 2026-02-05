@@ -1,8 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useAuth } from '@/lib/auth';
-import { useRouter } from 'next/navigation';
+import { useMemo, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import BottomNav from '@/components/BottomNav';
 import EventCardLarge from '@/components/EventCardLarge';
@@ -10,63 +8,28 @@ import EventsCalendar from '@/components/EventsCalendar';
 import SearchBar from '@/components/SearchBar';
 import FilterChips from '@/components/FilterChips';
 import { Skeleton } from '@/components/SkeletonLoader';
-import { api } from '@/lib/api';
-import { Event, Sport } from '@/types';
+import { useEvents, useSports } from '@/lib/hooks';
+import { Event } from '@/types';
 import Link from 'next/link';
 
 export default function EventsPage() {
-  const { user } = useAuth();
-  const router = useRouter();
-  const [events, setEvents] = useState<Event[]>([]);
-  const [allEvents, setAllEvents] = useState<Event[]>([]);
-  const [sports, setSports] = useState<Sport[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { events: allEvents, isLoading: eventsLoading } = useEvents();
+  const { sports, isLoading: sportsLoading } = useSports();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSport, setSelectedSport] = useState<number | null>(null);
-  const [locationFilter, setLocationFilter] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
 
-  useEffect(() => {
-    loadData();
-  }, [user]);
+  const loading = eventsLoading || sportsLoading;
 
-  useEffect(() => {
-    filterEvents();
-  }, [searchQuery, selectedSport, locationFilter, allEvents]);
-
-  const loadData = async () => {
-    try {
-      const [eventsData, sportsData] = await Promise.all([
-        api.getEvents(),
-        api.getSports(),
-      ]);
-      setAllEvents(eventsData);
-      setEvents(eventsData);
-      setSports(sportsData);
-    } catch (error) {
-      console.error('Failed to load events:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filterEvents = () => {
+  const events = useMemo(() => {
     let filtered = [...allEvents];
 
-    // Filter by sport
     if (selectedSport !== null) {
-      filtered = filtered.filter(event => event.sport?.id === selectedSport);
+      filtered = filtered.filter(event => {
+        const eventSportId = event.sport?.id ?? event.sport_id;
+        return Number(eventSportId) === Number(selectedSport);
+      });
     }
-
-    // Filter by location
-    if (locationFilter.trim()) {
-      const location = locationFilter.toLowerCase();
-      filtered = filtered.filter(event =>
-        event.location.toLowerCase().includes(location)
-      );
-    }
-
-    // Filter by search query
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(event =>
@@ -76,9 +39,8 @@ export default function EventsPage() {
         event.sport?.name.toLowerCase().includes(query)
       );
     }
-
-    setEvents(filtered);
-  };
+    return filtered;
+  }, [allEvents, selectedSport, searchQuery]);
 
   if (loading) {
     return (
@@ -147,17 +109,6 @@ export default function EventsPage() {
               onChange={setSearchQuery}
               placeholder="Search events by title, description, or location..."
             />
-            
-            {/* Location Filter */}
-            <div>
-              <input
-                type="text"
-                value={locationFilter}
-                onChange={(e) => setLocationFilter(e.target.value)}
-                placeholder="Filter by location (e.g., City, State)"
-                className="w-full pl-5 pr-5 py-4 border border-white/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-white/50 focus:border-transparent bg-white/95 backdrop-blur-md text-gray-900 placeholder-gray-400 shadow-lg"
-              />
-            </div>
 
             <FilterChips 
               sports={sports} 
@@ -222,10 +173,10 @@ export default function EventsPage() {
               </svg>
             </div>
             <h3 className="text-2xl font-bold text-gray-900 mb-2">
-              {searchQuery || selectedSport || locationFilter ? 'No events found' : 'No events yet'}
+              {searchQuery || selectedSport ? 'No events found' : 'No events yet'}
             </h3>
             <p className="text-gray-600 mb-6">
-              {searchQuery || selectedSport || locationFilter
+              {searchQuery || selectedSport
                 ? 'Try adjusting your search or filters'
                 : 'Be the first to create an event!'}
             </p>

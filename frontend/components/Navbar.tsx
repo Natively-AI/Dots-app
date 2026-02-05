@@ -30,8 +30,7 @@ export default function Navbar() {
         const conversations = await api.getConversations();
         const totalUnread = conversations.reduce((sum, conv) => sum + (conv.unread_count || 0), 0);
         setUnreadCount(totalUnread);
-      } catch (error) {
-        console.error('Failed to load unread count:', error);
+      } catch {
         setUnreadCount(0);
       }
     };

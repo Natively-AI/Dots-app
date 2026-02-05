@@ -23,10 +23,25 @@ export default function CreateEventPage() {
     description: '',
     sport_id: '',
     location: '',
-    start_time: '',
-    end_time: '',
+    start_date: '',
+    start_hour: '9',
+    start_minute: '0',
+    start_ampm: 'AM',
+    end_date: '',
+    end_hour: '10',
+    end_minute: '0',
+    end_ampm: 'AM',
     max_participants: '',
   });
+
+  const toISO = (dateStr: string, hour: string, minute: string, ampm: string) => {
+    if (!dateStr) return null;
+    const h = parseInt(hour, 10);
+    const m = parseInt(minute, 10) || 0;
+    let h24 = ampm === 'AM' ? (h === 12 ? 0 : h) : (h === 12 ? 12 : h + 12);
+    const [y, mo, d] = dateStr.split('-').map(Number);
+    return new Date(y, mo - 1, d, h24, m).toISOString();
+  };
 
   useEffect(() => {
     // Wait for auth to finish loading
@@ -99,11 +114,18 @@ export default function CreateEventPage() {
         setUploadingImage(false);
       }
 
+      const start_time = toISO(formData.start_date, formData.start_hour, formData.start_minute, formData.start_ampm);
+      const end_time = formData.end_date
+        ? toISO(formData.end_date, formData.end_hour, formData.end_minute, formData.end_ampm)
+        : null;
       const eventData = {
-        ...formData,
+        title: formData.title,
+        description: formData.description,
         sport_id: parseInt(formData.sport_id),
+        location: formData.location,
+        start_time: start_time!,
+        end_time,
         max_participants: formData.max_participants ? parseInt(formData.max_participants) : null,
-        end_time: formData.end_time || null,
         cover_image_url: coverImageUrl,
       };
       const event = await api.createEvent(eventData);
@@ -183,25 +205,83 @@ export default function CreateEventPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Start Time</label>
-              <input
-                type="datetime-local"
-                required
-                value={formData.start_time}
-                onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-              />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">Start Date & Time</label>
+              <div className="flex gap-2 flex-wrap">
+                <input
+                  type="date"
+                  required
+                  value={formData.start_date}
+                  onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                  className="flex-1 min-w-[140px] border border-gray-300 rounded-md px-3 py-2"
+                />
+                <select
+                  value={formData.start_hour}
+                  onChange={(e) => setFormData({ ...formData, start_hour: e.target.value })}
+                  className="w-16 border border-gray-300 rounded-md px-2 py-2"
+                >
+                  {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+                <span className="self-center text-gray-500">:</span>
+                <select
+                  value={formData.start_minute}
+                  onChange={(e) => setFormData({ ...formData, start_minute: e.target.value })}
+                  className="w-20 border border-gray-300 rounded-md px-2 py-2"
+                >
+                  {Array.from({ length: 12 }, (_, i) => i * 5).map((n) => (
+                    <option key={n} value={n}>{n.toString().padStart(2, '0')}</option>
+                  ))}
+                </select>
+                <select
+                  value={formData.start_ampm}
+                  onChange={(e) => setFormData({ ...formData, start_ampm: e.target.value })}
+                  className="w-16 border border-gray-300 rounded-md px-2 py-2"
+                >
+                  <option value="AM">AM</option>
+                  <option value="PM">PM</option>
+                </select>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">End Time (optional)</label>
-              <input
-                type="datetime-local"
-                value={formData.end_time}
-                onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-              />
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">End Date & Time (optional)</label>
+              <div className="flex gap-2 flex-wrap">
+                <input
+                  type="date"
+                  value={formData.end_date}
+                  onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                  className="flex-1 min-w-[140px] border border-gray-300 rounded-md px-3 py-2"
+                />
+                <select
+                  value={formData.end_hour}
+                  onChange={(e) => setFormData({ ...formData, end_hour: e.target.value })}
+                  className="w-16 border border-gray-300 rounded-md px-2 py-2"
+                >
+                  {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+                <span className="self-center text-gray-500">:</span>
+                <select
+                  value={formData.end_minute}
+                  onChange={(e) => setFormData({ ...formData, end_minute: e.target.value })}
+                  className="w-20 border border-gray-300 rounded-md px-2 py-2"
+                >
+                  {Array.from({ length: 12 }, (_, i) => i * 5).map((n) => (
+                    <option key={n} value={n}>{n.toString().padStart(2, '0')}</option>
+                  ))}
+                </select>
+                <select
+                  value={formData.end_ampm}
+                  onChange={(e) => setFormData({ ...formData, end_ampm: e.target.value })}
+                  className="w-16 border border-gray-300 rounded-md px-2 py-2"
+                >
+                  <option value="AM">AM</option>
+                  <option value="PM">PM</option>
+                </select>
+              </div>
             </div>
           </div>
 

@@ -2,6 +2,68 @@
 
 import { supabase } from './supabase';
 
+/** Max dimensions and quality for profile images - keeps uploads fast */
+const PROFILE_IMAGE_SPECS = {
+  avatar: { maxWidth: 400, maxHeight: 400, quality: 0.85 },
+  cover: { maxWidth: 1200, maxHeight: 600, quality: 0.85 },
+  photo: { maxWidth: 800, maxHeight: 800, quality: 0.85 },
+} as const;
+
+/**
+ * Resize and compress an image for faster uploads (uses Canvas, no deps)
+ */
+export async function compressImageForUpload(
+  file: File,
+  type: 'avatar' | 'cover' | 'photo'
+): Promise<File> {
+  const specs = PROFILE_IMAGE_SPECS[type];
+  if (!file.type.startsWith('image/')) return file;
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const { maxWidth, maxHeight, quality } = specs;
+      let { width, height } = img;
+      if (width <= maxWidth && height <= maxHeight && file.size < 300 * 1024) {
+        resolve(file); // Already small enough
+        return;
+      }
+      const ratio = Math.min(maxWidth / width, maxHeight / height, 1);
+      width = Math.round(width * ratio);
+      height = Math.round(height * ratio);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(file);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            resolve(file);
+            return;
+          }
+          const baseName = file.name.replace(/\.[^.]+$/, '') || 'image';
+          resolve(new File([blob], `${baseName}.jpg`, { type: 'image/jpeg', lastModified: Date.now() }));
+        },
+        'image/jpeg',
+        quality
+      );
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(file);
+    };
+    img.src = url;
+  });
+}
+
 /**
  * Upload an image file to Supabase Storage
  * @param file - The image file to upload
@@ -51,7 +113,7 @@ export async function uploadImage(
       .from(bucket)
       .upload(filePath, file, {
         cacheControl: '3600',
-        upsert: false
+        upsert: true
       });
     
     if (error) {
@@ -131,6 +193,7 @@ export async function uploadImage(
 
 /**
  * Upload a profile image (avatar, cover, or photo)
+ * Compresses images client-side for faster uploads.
  * @param file - The image file to upload
  * @param type - Type of profile image: 'avatar', 'cover', or 'photo'
  * @param userId - The user ID
@@ -141,8 +204,9 @@ export async function uploadProfileImage(
   type: 'avatar' | 'cover' | 'photo',
   userId: number
 ): Promise<string> {
+  const compressed = await compressImageForUpload(file, type);
   const folder = `profiles/${userId}/${type}`;
-  return uploadImage(file, 'images', folder);
+  return uploadImage(compressed, 'images', folder);
 }
 
 /**

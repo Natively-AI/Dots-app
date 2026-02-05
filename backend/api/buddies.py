@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from supabase import Client
 from typing import List, Optional
 from datetime import datetime
-import random
 from core.database import get_supabase
 from api.auth import get_current_user
 from schemas.buddy import BuddyResponse, BuddyDetail, BuddyRequest, BuddyUpdate
@@ -122,14 +121,16 @@ async def get_suggested_buddies(
         user_sports = user.get("sports", [])
         if len(user_sports) >= 5:
             badges.append({"name": "Multi-Sport", "icon": "🎯"})
-        
-        # Generate multiple photos for the user
-        num_photos = random.randint(3, 5)
-        base_seed = abs(hash(user.get("email", str(user["id"])))) % 100000
+
+        # Get user's actual uploaded photos (or empty if none)
         photos = []
-        for i in range(num_photos):
-            photos.append(f"https://picsum.photos/seed/{base_seed + i}/400/600")
-        
+        try:
+            photos_result = supabase.table("user_photos").select("photo_url").eq("user_id", user["id"]).order("display_order").execute()
+            if photos_result.data:
+                photos = [p["photo_url"] for p in photos_result.data if p.get("photo_url")]
+        except Exception:
+            pass
+
         result.append({
             "user": {
                 "id": user["id"],

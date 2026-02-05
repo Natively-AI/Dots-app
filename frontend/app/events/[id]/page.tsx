@@ -1,9 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 import { useRouter, useParams } from 'next/navigation';
 import Navbar from '@/components/Navbar';
+import ProfileAvatar from '@/components/ProfileAvatar';
+import { EventDetailSkeleton } from '@/components/SkeletonLoader';
 import { api } from '@/lib/api';
 import { Event } from '@/types';
 
@@ -34,11 +37,19 @@ export default function EventDetailPage() {
   };
 
   const handleRsvp = async () => {
+    if (!user) {
+      router.push('/login?redirect=' + encodeURIComponent('/events/' + eventId));
+      return;
+    }
     setRsvping(true);
     try {
       await api.rsvpEvent(eventId);
       await loadEvent();
     } catch (error: any) {
+      if (error?.message?.toLowerCase().includes('not authenticated')) {
+        router.push('/login?redirect=' + encodeURIComponent('/events/' + eventId));
+        return;
+      }
       alert(error.message || 'Failed to RSVP');
     } finally {
       setRsvping(false);
@@ -46,11 +57,19 @@ export default function EventDetailPage() {
   };
 
   const handleCancelRsvp = async () => {
+    if (!user) {
+      router.push('/login?redirect=' + encodeURIComponent('/events/' + eventId));
+      return;
+    }
     setRsvping(true);
     try {
       await api.cancelRsvp(eventId);
       await loadEvent();
     } catch (error: any) {
+      if (error?.message?.toLowerCase().includes('not authenticated')) {
+        router.push('/login?redirect=' + encodeURIComponent('/events/' + eventId));
+        return;
+      }
       alert(error.message || 'Failed to cancel RSVP');
     } finally {
       setRsvping(false);
@@ -61,9 +80,7 @@ export default function EventDetailPage() {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-        <div className="flex items-center justify-center h-64">
-          <div className="text-gray-600">Loading...</div>
-        </div>
+        <EventDetailSkeleton />
       </div>
     );
   }
@@ -210,15 +227,19 @@ export default function EventDetailPage() {
                 </div>
 
                 {event.host && (
-                  <div className="flex items-start space-x-4">
-                    <div className="w-12 h-12 bg-[#E6F9F4] rounded-xl flex items-center justify-center flex-shrink-0">
-                      <span className="text-2xl">👤</span>
-                    </div>
+                  <Link href={`/profile?userId=${event.host.id}`} className="flex items-start space-x-4 hover:opacity-90 transition-opacity">
+                    <ProfileAvatar
+                      userId={event.host.id}
+                      avatarUrl={event.host.avatar_url}
+                      fullName={event.host.full_name}
+                      size="md"
+                      linkToProfile={false}
+                    />
                     <div>
                       <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">Hosted by</p>
                       <p className="text-gray-900 font-medium">{event.host.full_name || 'Anonymous'}</p>
                     </div>
-                  </div>
+                  </Link>
                 )}
               </div>
             </div>
@@ -232,13 +253,12 @@ export default function EventDetailPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {event.participants.map(participant => (
                     <div key={participant.id} className="flex items-center space-x-3 p-3 rounded-xl hover:bg-gray-50 transition-colors">
-                      <div className="w-12 h-12 bg-gradient-to-br from-[#0ef9b4] to-[#0dd9a0] rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
-                        {participant.avatar_url ? (
-                          <img src={participant.avatar_url} alt={participant.full_name || ''} className="w-12 h-12 rounded-full object-cover" />
-                        ) : (
-                          <span>{participant.full_name?.[0] || 'U'}</span>
-                        )}
-                      </div>
+                      <ProfileAvatar
+                        userId={participant.id}
+                        avatarUrl={participant.avatar_url}
+                        fullName={participant.full_name}
+                        size="md"
+                      />
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-gray-900 truncate">
                           {participant.full_name || 'Anonymous'}
@@ -262,6 +282,14 @@ export default function EventDetailPage() {
           {/* Right Column - Action Sidebar */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-3xl shadow-lg p-6 sticky top-8">
+              {event.host_id === user?.id && (
+                <Link
+                  href="/profile?tab=events"
+                  className="block w-full px-6 py-3 bg-[#0ef9b4] text-black rounded-xl font-semibold text-center hover:bg-[#0dd9a0] transition-colors mb-4"
+                >
+                  Manage Event (Edit / Delete)
+                </Link>
+              )}
               {event.host_id !== user?.id && (
                 <div className="space-y-4">
                   {isParticipant ? (
@@ -278,16 +306,38 @@ export default function EventDetailPage() {
                         {rsvping ? 'Cancelling...' : 'Cancel RSVP'}
                       </button>
                     </>
+                  ) : event.rsvp_status === 'pending' ? (
+                    <>
+                      <div className="flex items-center space-x-2 text-amber-600 mb-4">
+                        <span className="text-2xl">⏳</span>
+                        <span className="font-semibold">Request sent</span>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-4">Waiting for host approval</p>
+                      <button
+                        onClick={handleCancelRsvp}
+                        disabled={rsvping}
+                        className="w-full px-6 py-3 bg-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-300 transition-colors disabled:opacity-50"
+                      >
+                        {rsvping ? 'Cancelling...' : 'Cancel Request'}
+                      </button>
+                    </>
+                  ) : !user ? (
+                    <Link
+                      href={'/login?redirect=' + encodeURIComponent('/events/' + event.id)}
+                      className="block w-full px-6 py-4 bg-[#0ef9b4] text-black rounded-xl font-bold text-lg hover:bg-[#0dd9a0] transition-colors text-center shadow-lg hover:shadow-xl"
+                    >
+                      Sign in to Request to Join
+                    </Link>
                   ) : (
                     <button
                       onClick={handleRsvp}
                       disabled={rsvping || (event.max_participants ? event.participant_count >= event.max_participants : false)}
                       className="w-full px-6 py-4 bg-[#0ef9b4] text-black rounded-xl font-bold text-lg hover:bg-[#0dd9a0] transition-colors disabled:opacity-50 shadow-lg hover:shadow-xl"
                     >
-                      {rsvping ? 'RSVPing...' : 'RSVP to Event'}
+                      {rsvping ? 'RSVPing...' : 'Request to Join'}
                     </button>
                   )}
-                  {event.max_participants && event.participant_count >= event.max_participants && !isParticipant && (
+                  {event.max_participants && event.participant_count >= event.max_participants && !isParticipant && event.rsvp_status !== 'pending' && user && (
                     <p className="text-sm text-red-500 text-center">Event is full</p>
                   )}
                 </div>

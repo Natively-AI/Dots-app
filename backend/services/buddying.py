@@ -3,6 +3,19 @@ from typing import List
 from datetime import datetime
 
 
+def _extract_ids(items: list, key: str = "id") -> set:
+    """Extract IDs from a list of dicts or primitives. Handles unhashable types."""
+    if not items:
+        return set()
+    first = items[0]
+    if isinstance(first, dict):
+        return {x.get(key) for x in items if x.get(key) is not None}
+    try:
+        return set(items)
+    except TypeError:
+        return set()
+
+
 def calculate_buddy_score(user1: dict, user2: dict, supabase: Client = None) -> float:
     """
     Calculate buddy score between two users based on:
@@ -13,16 +26,12 @@ def calculate_buddy_score(user1: dict, user2: dict, supabase: Client = None) -> 
     - Activity level similarity (10%)
     """
     score = 0.0
-    
+
     # Sports overlap (35%) - Most important factor
-    user1_sports = set(user1.get("sports", []))
-    user2_sports = set(user2.get("sports", []))
-    
-    # If sports are dicts with 'id', extract IDs
-    if user1_sports and isinstance(list(user1_sports)[0] if user1_sports else None, dict):
-        user1_sports = {s.get("id") for s in user1_sports if s.get("id")}
-    if user2_sports and isinstance(list(user2_sports)[0] if user2_sports else None, dict):
-        user2_sports = {s.get("id") for s in user2_sports if s.get("id")}
+    raw1 = user1.get("sports") or []
+    raw2 = user2.get("sports") or []
+    user1_sports = _extract_ids(raw1 if isinstance(raw1, list) else [])
+    user2_sports = _extract_ids(raw2 if isinstance(raw2, list) else [])
     
     if user1_sports and user2_sports:
         common_sports = user1_sports.intersection(user2_sports)
@@ -37,14 +46,10 @@ def calculate_buddy_score(user1: dict, user2: dict, supabase: Client = None) -> 
             score += 0.15  # Some overlap, partial score
     
     # Goals overlap (25%) - Important for compatibility
-    user1_goals = set(user1.get("goals", []))
-    user2_goals = set(user2.get("goals", []))
-    
-    # If goals are dicts with 'id', extract IDs
-    if user1_goals and isinstance(list(user1_goals)[0] if user1_goals else None, dict):
-        user1_goals = {g.get("id") for g in user1_goals if g.get("id")}
-    if user2_goals and isinstance(list(user2_goals)[0] if user2_goals else None, dict):
-        user2_goals = {g.get("id") for g in user2_goals if g.get("id")}
+    raw1 = user1.get("goals") or []
+    raw2 = user2.get("goals") or []
+    user1_goals = _extract_ids(raw1 if isinstance(raw1, list) else [])
+    user2_goals = _extract_ids(raw2 if isinstance(raw2, list) else [])
     
     if user1_goals and user2_goals:
         common_goals = user1_goals.intersection(user2_goals)

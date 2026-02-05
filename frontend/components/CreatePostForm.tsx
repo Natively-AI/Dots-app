@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { Post } from '@/types';
 import { useAuth } from '@/lib/auth';
 import { uploadImage } from '@/lib/storage';
+import ProfileAvatar from './ProfileAvatar';
 
 interface CreatePostFormProps {
   onPostCreated: (post: Post) => void;
@@ -98,11 +99,19 @@ export default function CreatePostForm({ onPostCreated, onCancel }: CreatePostFo
   return (
     <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-xl p-4 mb-4">
       <div className="flex items-start gap-3 mb-3">
-        <div className="w-10 h-10 rounded-full bg-[#0ef9b4] flex items-center justify-center flex-shrink-0">
-          <span className="text-black font-semibold">
-            {user?.full_name?.charAt(0).toUpperCase() || 'U'}
-          </span>
-        </div>
+        {user && (
+          <ProfileAvatar
+            userId={user.id}
+            avatarUrl={user.avatar_url}
+            fullName={user.full_name}
+            size="sm"
+          />
+        )}
+        {!user && (
+          <div className="w-10 h-10 rounded-full bg-[#0ef9b4] flex items-center justify-center flex-shrink-0">
+            <span className="text-black font-semibold">U</span>
+          </div>
+        )}
         <div className="flex-1">
           <textarea
             value={content}
